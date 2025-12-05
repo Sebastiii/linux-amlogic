@@ -2591,23 +2591,23 @@ static void set_aud_info_pkt(struct hdmitx_dev *hdev, struct hdmitx_audpara *aud
 
 	switch (audio_param->type)
 	{
-		case CT_MAT:       // passthrough HBR - high bit rate
+		case CT_MAT:       // passthrough, Non-L-PCM, HBR (4× packed sample stream)
 		case CT_DTS_HD_MA:
+		case CT_DTS_HD:
 			hdmitx_set_reg_bits(HDMITX_DWC_FC_AUDICONF0, CC_8CH, 4, 3);            // CC [6:4] (Channel Count)
 			hdmitx_wr_reg(HDMITX_DWC_FC_AUDICONF2, CA_RRC_RLC_RR_RL_FC_LFE_FR_FL); // CA [7:0] (Channel Allocation)
-			hdmitx_set_reg_bits(HDMITX_DWC_FC_AUDSCONF, 1, 0, 1);     	           // [0]   aud_packet_layout.
+			hdmitx_set_reg_bits(HDMITX_DWC_FC_AUDSCONF, 1, 0, 1);      	           // [0]   aud_packet_layout.
 			set_spdif_reg(1, 1);
 			break;
-		case CT_PCM:       // AudSamp LPCM
+		case CT_PCM:       // AudSamp L-PCM LBR/HBR
 			hdmitx_set_reg_bits(HDMITX_DWC_FC_AUDICONF0, audio_param->channel_num, 4, 3); // CC [6:4] (Channel Count)
 			hdmitx_wr_reg(HDMITX_DWC_FC_AUDICONF2, audio_param->layout);                  // CA [7:0] (Channel Allocation)
 			hdmitx_set_reg_bits(HDMITX_DWC_FC_AUDSCONF, (audio_param->channel_num > CC_2CH), 0, 1); // [0]   aud_packet_layout.
 			set_spdif_reg(0, 0);
 			break;
-		case CT_AC_3:      // passthrough
+		case CT_AC_3:      // passthrough, LPCM (Why!), LBR (IEC 61937 LBR burst)
 		case CT_DOLBY_D:
 		case CT_DTS:
-		case CT_DTS_HD:
 		default:
 			hdmitx_set_reg_bits(HDMITX_DWC_FC_AUDICONF0, CC_2CH, 4, 3);  // CC [6:4] (Channel Count)
 			hdmitx_wr_reg(HDMITX_DWC_FC_AUDICONF2, CA_FR_FL);            // CA [7:0] (Channel Allocation)
@@ -2628,7 +2628,8 @@ static void set_aud_acr_pkt(struct hdmitx_dev *hdev,
 	hdmitx_wr_reg(HDMITX_DWC_AUD_INPUTCLKFS, hdev->tx_aud_src ? 4 : 0);
 
 	if ((audio_param->type == CT_MAT) ||
-	    (audio_param->type == CT_DTS_HD_MA))
+		(audio_param->type == CT_DTS_HD_MA) ||
+		(audio_param->type == CT_DTS_HD))
 		hdmitx_wr_reg(HDMITX_DWC_AUD_INPUTCLKFS, 2);
 
 	if ((hdev->frac_rate_policy) && (hdev->para->timing.frac_freq))
@@ -2640,6 +2641,10 @@ static void set_aud_acr_pkt(struct hdmitx_dev *hdev,
 		aud_n_para = hdmi_get_aud_n_paras(audio_param->sample_rate, COLORDEPTH_24B, char_rate);
 	else
 		aud_n_para = hdmi_get_aud_n_paras(audio_param->sample_rate, hdev->para->cd, char_rate);
+
+	// Force correct N for HBR (DTS-HD HRA): 6144 per HDMI spec
+	if (audio_param->type == CT_DTS_HD)
+		aud_n_para = 6144;
 
 	pr_info(HW "aud_n_para = %d\n", aud_n_para);
 
@@ -2664,6 +2669,16 @@ static void set_aud_acr_pkt(struct hdmitx_dev *hdev,
 	hdmitx_wr_reg(HDMITX_DWC_AUD_N3, data32);
 	hdmitx_wr_reg(HDMITX_DWC_AUD_N2, (aud_n_para>>8)&0xff); /* AudN[15:8] */
 	hdmitx_wr_reg(HDMITX_DWC_AUD_N1, aud_n_para&0xff); /* AudN[7:0] */
+
+	if (audio_param->type == CT_DTS_HD)
+	{
+		/* Make sure N_shift stays 0 so sinks that dislike shifted N still lock */
+		data32 = 0;
+		data32 |= (0 << 7);  /* [7:5] N_shift */
+		data32 |= (0 << 4);  /* [  4] CTS_manual */
+		data32 |= (0 << 0);  /* [3:0] manual AudCTS[19:16] */
+		hdmitx_wr_reg(HDMITX_DWC_AUD_CTS3, data32);
+	}
 }
 
 static void set_aud_fifo_rst(void)
@@ -2758,8 +2773,11 @@ static int hdmitx_set_audmode(struct hdmitx_dev *hdev, struct hdmitx_audpara *au
 	hdmitx_wr_reg(HDMITX_DWC_AUD_CONF1, data32);
 
 	data32 = 0;
-	data32 |= (0 << 1);  // [  1] NLPCM
-	data32 |= (0 << 0);  // [  0] HBR
+	if (audio_param->type == CT_DTS_HD)
+	{
+		data32 |= (1 << 1);  // [  1] NLPCM for compressed streams
+		data32 |= (1 << 0);  // [  0] HBR for high bitrate compressed audio
+	}
 	hdmitx_wr_reg(HDMITX_DWC_AUD_CONF2, data32);
 
 	/* spdif sampler config */
