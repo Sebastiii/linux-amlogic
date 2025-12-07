@@ -474,7 +474,8 @@ struct hdmitx_dev {
 	unsigned int already_used;
 	/* configure for I2S: 8ch in, 2ch out */
 	/* 0: default setting  1:ch0/1  2:ch2/3  3:ch4/5  4:ch6/7 */
-	unsigned int i2s_mask;
+	unsigned int aud_output_ch;
+	unsigned int hdmi_ch;
 	unsigned int tx_aud_src; /* 0: SPDIF  1: I2S */
 /* if set to 1, then HDMI will output no audio */
 /* In KTV case, HDMI output Picture only, and Audio is driven by other
@@ -948,3 +949,7 @@ bool hdmitx_find_vendor_6g(struct hdmitx_dev *hdev);
 bool hdmitx_find_vendor_ratio(struct hdmitx_dev *hdev);
 int hdmitx_uboot_already_display(int type);
 #endif
+
+extern unsigned int xbmc_dv_vp;
+extern unsigned int xbmc_dv_vp_tm;
+extern bool xbmc_lldv_to_hdr10_fmt;
