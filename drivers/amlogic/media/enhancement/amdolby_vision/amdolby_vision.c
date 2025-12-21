@@ -345,6 +345,18 @@ static bool xbmc_meta_level_5 = false;
 module_param(xbmc_meta_level_5, bool, 0664);
 MODULE_PARM_DESC(xbmc_meta_level_5, "\n xbmc_meta_level_5\n");
 
+static bool xbmc_meta_level_5_osdst = false;
+module_param(xbmc_meta_level_5_osdst, bool, 0664);
+MODULE_PARM_DESC(xbmc_meta_level_5_osdst, "\n xbmc_meta_level_5_osdst\n");
+
+static bool dolby_vision_xbmc_osd = false;
+module_param(dolby_vision_xbmc_osd, bool, 0664);
+MODULE_PARM_DESC(dolby_vision_xbmc_osd, "\n dolby_vision_xbmc_osd\n");
+
+static bool dolby_vision_subtitles = false;
+module_param(dolby_vision_subtitles, bool, 0664);
+MODULE_PARM_DESC(dolby_vision_subtitles, "\n dolby_vision_subtitles\n");
+
 // extern
 
 unsigned int xbmc_dv_vp = 0;
@@ -2093,6 +2105,7 @@ static inline void source_meta_copy(
   bool level_3_done = false;
   bool level_5_done = false;
   bool convert_to_hdr10plus = false;
+  bool osd_or_subtitles_enabled = (xbmc_meta_level_5_osdst && (dolby_vision_xbmc_osd || dolby_vision_subtitles));
 
   // if ((debug_dolby & 4) && dump_enable)
   //   dump_buffer("DOLBY source_meta_copy: combined ETSI display management metadata BEFORE processing", combo_meta_buffer, combo_meta_size);
@@ -2132,7 +2145,7 @@ static inline void source_meta_copy(
       level_5_done = true;
     }
 
-    if (level != 5 || ((level == 5) && xbmc_meta_level_5))
+    if (level != 5 || ((level == 5) && xbmc_meta_level_5 && !osd_or_subtitles_enabled))
     {
       memcpy(combo_index, orig_index, level_size);
       combo_index += level_size;
