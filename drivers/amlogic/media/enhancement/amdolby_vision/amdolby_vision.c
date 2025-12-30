@@ -2056,7 +2056,8 @@ static unsigned char combo_meta_buffer[CORE_META_LENGTH];
 static inline void source_meta_copy(
   unsigned char* orig_meta_buffer,
   size_t orig_meta_size,
-  struct md_reg_ipcore3 *core_meta)
+  struct md_reg_ipcore3 *core_meta,
+  u16 level5_h_o)
 {
   if (!orig_meta_buffer || !core_meta)
   {
@@ -2092,7 +2093,7 @@ static inline void source_meta_copy(
 
   size_t combo_meta_size = ETSI_META_OFFSET;
   unsigned char* combo_index = combo_meta_buffer + ETSI_META_OFFSET;
-  const unsigned char* orig_index = orig_meta_buffer + ETSI_META_OFFSET;
+  unsigned char* orig_index = orig_meta_buffer + ETSI_META_OFFSET;
   const unsigned char* orig_end_index = orig_meta_buffer + orig_meta_size;
 
   size_t remaining_space = CORE_META_LENGTH - ETSI_META_OFFSET;
@@ -2104,8 +2105,11 @@ static inline void source_meta_copy(
   bool level_1_done = false;
   bool level_3_done = false;
   bool level_5_done = false;
+  bool level_9_done = false;
+  bool level_11_done = false;
+  bool level_254_done = false;
   bool convert_to_hdr10plus = false;
-  bool osd_or_subtitles_enabled = (xbmc_meta_level_5_osdst && (dolby_vision_xbmc_osd || dolby_vision_subtitles));
+  bool allow_level_5_source = (xbmc_meta_level_5 && !(xbmc_meta_level_5_osdst && (dolby_vision_xbmc_osd || dolby_vision_subtitles)));
 
   // if ((debug_dolby & 4) && dump_enable)
   //   dump_buffer("DOLBY source_meta_copy: combined ETSI display management metadata BEFORE processing", combo_meta_buffer, combo_meta_size);
@@ -2125,19 +2129,16 @@ static inline void source_meta_copy(
       break;
     }
 
-    if ((level > 3) && !level_3_done && level_1_done && xbmc_dv_hdr10plus_conv)
-    {
-      memcpy(combo_index, LEVEL_3_DATA, LEVEL_3_LENGTH);
-      combo_index += LEVEL_3_LENGTH;
-      combo_meta_size += LEVEL_3_LENGTH;
-      remaining_space -= LEVEL_3_LENGTH;
-      num_levels++;
-      level_3_done = true;
-    }
-
     if ((level > 5) && !level_5_done && level_1_done)
     {
       memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
+      if ((level5_h_o != 0) && allow_level_5_source)
+      {
+        combo_index[9] = level5_h_o >> 8;
+        combo_index[10] = level5_h_o & 0xFF;
+        combo_index[11] = combo_index[9];
+        combo_index[12] = combo_index[10];	
+      }
       combo_index += LEVEL_5_LENGTH;
       combo_meta_size += LEVEL_5_LENGTH;
       remaining_space -= LEVEL_5_LENGTH;
@@ -2145,16 +2146,45 @@ static inline void source_meta_copy(
       level_5_done = true;
     }
 
-    if (level != 5 || ((level == 5) && xbmc_meta_level_5 && !osd_or_subtitles_enabled))
+    if (level != 5 || ((level == 5) && allow_level_5_source))
     {
+      if (level == 5)
+      {
+        if ((level5_h_o == 0) || (level5_h_o != (u16)((orig_index[9] << 8) | orig_index[10])))
+        {
+          u16 temp_h = level5_h_o + (u16)((orig_index[9] << 8) | orig_index[10]);
+          orig_index[9] = temp_h >> 8;
+          orig_index[10] = temp_h & 0xFF;
+          orig_index[11] = orig_index[9];
+          orig_index[12] = orig_index[10];
+        }
+        level_5_done = true;
+      }
       memcpy(combo_index, orig_index, level_size);
       combo_index += level_size;
       combo_meta_size += level_size;
       remaining_space -= level_size;
       num_levels++;
-      if (level == 1) level_1_done = true;
-      if (level == 3) level_3_done = true;
-      if (level == 5) level_5_done = true;
+      switch (level)
+      {
+        case 1:
+          level_1_done = true;
+          break;
+        case 3:
+          level_3_done = true;
+          break;
+        case 9:
+          level_9_done = true;
+          break;
+        case 11:
+          level_11_done = true;
+          break;
+        case 254:
+          level_254_done = true;
+          break;
+        default:
+          break;
+	  }
     }
 
     orig_index += level_size;
@@ -2163,7 +2193,23 @@ static inline void source_meta_copy(
 
   convert_to_hdr10plus = (level_1_done && xbmc_dv_hdr10plus_conv);
 
-  if ((level < 3) && convert_to_hdr10plus)
+  if (!level_5_done && level_1_done)
+  {
+    memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
+    if ((level5_h_o != 0) && allow_level_5_source)
+    {
+      combo_index[9] = level5_h_o >> 8;
+      combo_index[10] = level5_h_o & 0xFF;
+      combo_index[11] = combo_index[9];
+      combo_index[12] = combo_index[10];	
+    }
+    combo_index += LEVEL_5_LENGTH;
+    combo_meta_size += LEVEL_5_LENGTH;
+    num_levels++;
+    orig_index += LEVEL_5_LENGTH;
+  }
+
+  if (!level_3_done && convert_to_hdr10plus)
   {
     memcpy(combo_index, LEVEL_3_DATA, LEVEL_3_LENGTH);
     combo_index += LEVEL_3_LENGTH;
@@ -2172,16 +2218,7 @@ static inline void source_meta_copy(
     orig_index += LEVEL_3_LENGTH;
   }
 
-  if ((level <= 5) && !level_5_done && level_1_done)
-  {
-    memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
-    combo_index += LEVEL_5_LENGTH;
-    combo_meta_size += LEVEL_5_LENGTH;
-    num_levels++;
-    orig_index += LEVEL_5_LENGTH;
-  }
-
-  if ((level < 9) && convert_to_hdr10plus)
+  if (!level_9_done && convert_to_hdr10plus)
   {
     memcpy(combo_index, LEVEL_9_DATA, LEVEL_9_LENGTH);
     combo_index += LEVEL_9_LENGTH;
@@ -2190,7 +2227,7 @@ static inline void source_meta_copy(
     orig_index += LEVEL_9_LENGTH;
   }
 
-  if ((level < 11) && convert_to_hdr10plus)
+  if (!level_11_done && convert_to_hdr10plus)
   {
     memcpy(combo_index, LEVEL_11_DATA, LEVEL_11_LENGTH);
     combo_index += LEVEL_11_LENGTH;
@@ -2199,7 +2236,7 @@ static inline void source_meta_copy(
     orig_index += LEVEL_11_LENGTH;
   }
 
-  if ((level < 254) && convert_to_hdr10plus)
+  if (!level_254_done && convert_to_hdr10plus)
   {
     memcpy(combo_index, LEVEL_254_DATA, LEVEL_254_LENGTH);
     combo_meta_size += LEVEL_254_LENGTH;
@@ -5809,8 +5846,24 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 	//	pr_info("controlpath time: %5ld us\n", time_use);
 	// }
 
-	if ((src_format == FORMAT_DOVI) && (dst_format == FORMAT_DOVI) && !is_dv_ll()) 
-		source_meta_copy(md_buf[current_id], total_md_size, &new_dovi_setting.md_reg3);
+	if ((src_format == FORMAT_DOVI) && (dst_format == FORMAT_DOVI) && !is_dv_ll())
+	{
+		u16 level5_h_o = 0;
+		if (vf)
+		{
+			u32 height_diff = 0;
+			if (vf->type & VIDTYPE_COMPRESS)
+			{
+			  if (vinfo->height > vf->compHeight) height_diff = vinfo->height - vf->compHeight;
+			}
+			else
+			{
+			  if (vinfo->height > vf->height) height_diff = vinfo->height - vf->height;
+			}
+			level5_h_o = (u16)(height_diff / 2);
+		}	
+		source_meta_copy(md_buf[current_id], total_md_size, &new_dovi_setting.md_reg3, level5_h_o);
+	}
 
 	if (flag >= 0) {
 
