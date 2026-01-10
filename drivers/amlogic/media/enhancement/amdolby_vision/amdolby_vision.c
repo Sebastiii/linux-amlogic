@@ -4740,7 +4740,10 @@ static inline void load_dolby_vsvdb(const struct dv_info *dv_info)
 			u16 vsvdb_max = 0;
 			u16 vsvdb_min = 0;
 			extract_dolby_vsvdb_source_lum(&vsvdb_min, &vsvdb_max);
-			if (xbmc_dv_md_source_max_pq == 0) xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
+			if ((xbmc_dv_md_source_max_pq == 0) && (((md_buf[current_id][66] << 8) | md_buf[current_id][67]) == 0))
+				xbmc_dv_md_source_max_pq =  vsvdb_max;
+			else if (xbmc_dv_md_source_max_pq == 0)
+				xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
 
 			if ((v == 2) && (((vsvdb_max > 2671) && (vsvdb_max < 3907)) || ((vsvdb_max > 3906) && (xbmc_dv_md_source_max_pq != 4095))))
 			{
@@ -4896,7 +4899,13 @@ static void send_hdmi_pkt
 
 			set_dolby_vsvdb_source_cs();
 
-			if (xbmc_dv_md_source_max_pq == 0) xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
+			u16 vsvdb_max = 0;
+			u16 vsvdb_min = 0;
+			extract_dolby_vsvdb_source_lum(&vsvdb_min, &vsvdb_max);
+			if ((xbmc_dv_md_source_max_pq == 0) && (((md_buf[current_id][66] << 8) | md_buf[current_id][67]) == 0))
+				xbmc_dv_md_source_max_pq =  vsvdb_max;
+			else if (xbmc_dv_md_source_max_pq == 0)
+				xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
 
 			hdr10_data.luminance[0] =
 				(xbmc_dv_md_source_max_pq == 3079) ? 0x03E8 :
@@ -5666,7 +5675,10 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 				break;
 			}
 		}
-		if (xbmc_dv_md_source_max_pq == 0) xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
+		if ((xbmc_dv_md_source_max_pq == 0) && (((md_buf[current_id][66] << 8) | md_buf[current_id][67]) == 0))
+			xbmc_dv_md_source_max_pq =  vsvdb_max;
+		else if (xbmc_dv_md_source_max_pq == 0)
+			xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
 		u16 calc_vsvdb_max = min_t(unsigned short, xbmc_dv_md_source_max_pq, vsvdb_max);
 		u16 new_min = vsvdb_min;
 		u16 new_max = vsvdb_max;
@@ -5756,7 +5768,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 	new_dovi_setting.video_width = w << 16;
 	new_dovi_setting.video_height = h << 16;
 
-	if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 1))
+	if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 1) && (src_format == FORMAT_DOVI))
 	{
 		new_dovi_setting.use_ll_flag = 0;
 		dolby_vision_target_max[FORMAT_DOVI][FORMAT_DOVI] = 10000;
