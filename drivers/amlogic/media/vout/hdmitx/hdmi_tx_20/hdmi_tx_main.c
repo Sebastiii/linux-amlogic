@@ -678,7 +678,7 @@ static int set_disp_mode_auto(void)
 	hdev->para = para;
 	vic = hdmitx_edid_get_VIC(hdev, mode, 1);
 
-	if (xbmc_lldv_to_hdr10_fmt) para->cs = COLORSPACE_YUV422;
+	if (xbmc_aml_linux_force_422) para->cs = COLORSPACE_YUV422;
 
 	// force colour subsampling when DV mode
 	switch (hdev->hdmi_current_eotf_type) {
@@ -709,6 +709,8 @@ static int set_disp_mode_auto(void)
 		default:
 			break;
 	}
+
+	if (xbmc_aml_linux_force_422 && (para->cs == COLORSPACE_YUV422)) para->cd = COLORDEPTH_36B;
 
 	// parse and set maximum colourdepth given by edid
 	// check for colour subsampling limit
@@ -2313,7 +2315,6 @@ static void hdmitx_set_hdr10plus_pkt(unsigned int flag,
 	hdev->hwop.setpacket(HDMI_PACKET_VEND, VEN_DB, VEN_HB);
 	hdev->hwop.cntlconfig(hdev, CONF_AVI_BT2020,
 			SET_AVI_BT2020);
-
 }
 
 static void hdmitx_set_cuva_hdr_vsif(struct cuva_hdr_vsif_para *data)

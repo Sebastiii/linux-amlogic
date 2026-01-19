@@ -357,19 +357,19 @@ static bool dolby_vision_subtitles = false;
 module_param(dolby_vision_subtitles, bool, 0664);
 MODULE_PARM_DESC(dolby_vision_subtitles, "\n dolby_vision_subtitles\n");
 
+static unsigned int xbmc_dv_vp_tm = 0;
+module_param(xbmc_dv_vp_tm, uint, 0664);
+MODULE_PARM_DESC(xbmc_dv_vp_tm, "\n xbmc_dv_vp_tm\n");
+
 // extern
 
 unsigned int xbmc_dv_vp = 0;
 module_param(xbmc_dv_vp, uint, 0664);
 MODULE_PARM_DESC(xbmc_dv_vp, "\n xbmc_dv_vp\n");
 
-unsigned int xbmc_dv_vp_tm = 0;
-module_param(xbmc_dv_vp_tm, uint, 0664);
-MODULE_PARM_DESC(xbmc_dv_vp_tm, "\n xbmc_dv_vp_tm\n");
-
-bool xbmc_lldv_to_hdr10_fmt = false;
-module_param(xbmc_lldv_to_hdr10_fmt, bool, 0664);
-MODULE_PARM_DESC(xbmc_lldv_to_hdr10_fmt, "\n xbmc_lldv_to_hdr10_fmt\n");
+bool xbmc_aml_linux_force_422 = false;
+module_param(xbmc_aml_linux_force_422, bool, 0664);
+MODULE_PARM_DESC(xbmc_aml_linux_force_422, "\n xbmc_aml_linux_force_422\n");
 
 // extern
 
@@ -4724,7 +4724,7 @@ static inline void set_dolby_vsvdb(const unsigned char *vsvdb_tbl, u32 vsvdb_len
 	//	dump_buffer("DOLBY: set_dolby_vsvdb - VSVDB Table", new_dovi_setting.vsvdb_tbl, new_dovi_setting.vsvdb_len);
 }
 
-static inline void load_dolby_vsvdb(const struct dv_info *dv_info)
+static inline void load_dolby_vsvdb(const struct dv_info *dv_info, enum signal_format_enum src_format)
 {
 	bool dovi_cap = ((dv_info->ieeeoui == 0x00d046) && (dv_info->block_flag == CORRECT));
 	
@@ -4740,10 +4740,11 @@ static inline void load_dolby_vsvdb(const struct dv_info *dv_info)
 			u16 vsvdb_max = 0;
 			u16 vsvdb_min = 0;
 			extract_dolby_vsvdb_source_lum(&vsvdb_min, &vsvdb_max);
-			if ((xbmc_dv_md_source_max_pq == 0) && (((md_buf[current_id][66] << 8) | md_buf[current_id][67]) == 0))
-				xbmc_dv_md_source_max_pq =  vsvdb_max;
-			else if (xbmc_dv_md_source_max_pq == 0)
+
+			if ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL))
 				xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
+			else
+				xbmc_dv_md_source_max_pq =  vsvdb_max;
 
 			if ((v == 2) && (((vsvdb_max > 2671) && (vsvdb_max < 3907)) || ((vsvdb_max > 3906) && (xbmc_dv_md_source_max_pq != 4095))))
 			{
@@ -4886,7 +4887,7 @@ static void send_hdmi_pkt
 
 		sdr_transition_delay = 0;
 
-		if (((xbmc_dv_vp == 1) || (xbmc_dv_vp == 2)) && (src_format == FORMAT_DOVI) && (xbmc_dv_hdr10_for_dv_ll_inject_num < 9))
+		if (((xbmc_dv_vp == 1) || (xbmc_dv_vp == 2)) && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)) && (xbmc_dv_hdr10_for_dv_ll_inject_num < 24))
 		{	
 			hdr10_data.features =
 			  (1 << 29)   // 1 video available / present
@@ -4899,13 +4900,7 @@ static void send_hdmi_pkt
 
 			set_dolby_vsvdb_source_cs();
 
-			u16 vsvdb_max = 0;
-			u16 vsvdb_min = 0;
-			extract_dolby_vsvdb_source_lum(&vsvdb_min, &vsvdb_max);
-			if ((xbmc_dv_md_source_max_pq == 0) && (((md_buf[current_id][66] << 8) | md_buf[current_id][67]) == 0))
-				xbmc_dv_md_source_max_pq =  vsvdb_max;
-			else if (xbmc_dv_md_source_max_pq == 0)
-				xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
+			xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
 
 			hdr10_data.luminance[0] =
 				(xbmc_dv_md_source_max_pq == 3079) ? 0x03E8 :
@@ -4914,7 +4909,7 @@ static void send_hdmi_pkt
 				(xbmc_dv_md_source_max_pq == 4095) ? 0x2710 :
 				(xbmc_dv_md_level_6_max_lum != 0)  ? xbmc_dv_md_level_6_max_lum : xbmc_dv_hdr10_max_lum;
 
-			if (xbmc_dv_md_source_min_pq == 0) xbmc_dv_md_source_min_pq = ((md_buf[current_id][64] << 8) | md_buf[current_id][65]);
+			xbmc_dv_md_source_min_pq = ((md_buf[current_id][64] << 8) | md_buf[current_id][65]);
 
 			hdr10_data.luminance[1] =
 				(xbmc_dv_md_source_min_pq == 0)   ? 0x0001 :
@@ -4953,7 +4948,7 @@ static void send_hdmi_pkt
 		}
 		else
 		{
-			 if (xbmc_dv_hdr10_for_dv_ll_inject_num < 9) set_hdr10_data_for_dv_ll();
+			 if (xbmc_dv_hdr10_for_dv_ll_inject_num < 24) set_hdr10_data_for_dv_ll();
 		}
 
 		if (vinfo && vinfo->vout_device &&
@@ -5645,10 +5640,10 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 		destroy_context();
 	}
 
-	if (xbmc_dv_vsvdb_inject_num < 9)
-		load_dolby_vsvdb(vinfo->vout_device->dv_info);
+	if (xbmc_dv_vsvdb_inject_num < 24)
+		load_dolby_vsvdb(vinfo->vout_device->dv_info, src_format);
 
-	if ((xbmc_dv_vp == 0) && is_dv_ll() && (xbmc_dv_vsvdb_source_lum_limit_num < 9))
+	if ((xbmc_dv_vp == 0) && is_dv_ll() && (xbmc_dv_vsvdb_source_lum_limit_num < 24))
 	{
 		unsigned char *x = &new_dovi_setting.vsvdb_tbl[5];
 		const unsigned char version = (x[0] >> 5) & 0x07;
@@ -5675,10 +5670,11 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 				break;
 			}
 		}
-		if ((xbmc_dv_md_source_max_pq == 0) && (((md_buf[current_id][66] << 8) | md_buf[current_id][67]) == 0))
-			xbmc_dv_md_source_max_pq =  vsvdb_max;
-		else if (xbmc_dv_md_source_max_pq == 0)
+		if ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL))
 			xbmc_dv_md_source_max_pq = (md_buf[current_id][66] << 8) | md_buf[current_id][67];
+		else
+			xbmc_dv_md_source_max_pq =  vsvdb_max;
+
 		u16 calc_vsvdb_max = min_t(unsigned short, xbmc_dv_md_source_max_pq, vsvdb_max);
 		u16 new_min = vsvdb_min;
 		u16 new_max = vsvdb_max;
@@ -5714,7 +5710,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 			}
 			if ((debug_dolby & 4) && dump_enable) 
 				dump_buffer("DOLBY: DV-LL vsvdb with limit", new_dovi_setting.vsvdb_tbl, new_dovi_setting.vsvdb_len);
-			if (xbmc_dv_hdr10_for_dv_ll && (xbmc_dv_hdr10_for_dv_ll_inject_num < 9) && (xbmc_dv_vp == 0))
+			if (xbmc_dv_hdr10_for_dv_ll && (xbmc_dv_hdr10_for_dv_ll_inject_num < 24) && (xbmc_dv_vp == 0))
 				set_hdr10_data_for_dv_ll();
 		}
 		xbmc_dv_vsvdb_source_lum_limit_num += 1;
@@ -5768,13 +5764,13 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 	new_dovi_setting.video_width = w << 16;
 	new_dovi_setting.video_height = h << 16;
 
-	if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 1) && (src_format == FORMAT_DOVI))
+	if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 1) && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)))
 	{
 		new_dovi_setting.use_ll_flag = 0;
 		dolby_vision_target_max[FORMAT_DOVI][FORMAT_DOVI] = 10000;
 	}
 
-	if ((xbmc_dv_vp == 0) && is_dv_ll() && (src_format == FORMAT_DOVI))
+	if ((xbmc_dv_vp == 0) && is_dv_ll() && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)))
 	{
 		unsigned char* temp_index = md_buf[current_id] + ETSI_META_OFFSET;
 		unsigned char* md_index = md_buf[current_id] + ETSI_META_OFFSET;
@@ -5813,8 +5809,8 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 
 	// if ((debug_dolby & 4) && dump_enable)
 	// {
-	//	if (xbmc_dv_md_source_max_pq == 0) xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
-	//	if (xbmc_dv_md_source_min_pq == 0) xbmc_dv_md_source_min_pq = ((md_buf[current_id][64] << 8) | md_buf[current_id][65]);
+	//	xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
+	//	xbmc_dv_md_source_min_pq = ((md_buf[current_id][64] << 8) | md_buf[current_id][65]);
 	//	pr_info("DOLBY: Before control_path - Source Max[%u], Source Min[%u]\n", xbmc_dv_md_source_max_pq, xbmc_dv_md_source_min_pq);
 	// }
 

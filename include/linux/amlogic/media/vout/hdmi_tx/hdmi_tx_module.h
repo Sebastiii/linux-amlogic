@@ -951,5 +951,4 @@ int hdmitx_uboot_already_display(int type);
 #endif
 
 extern unsigned int xbmc_dv_vp;
-extern unsigned int xbmc_dv_vp_tm;
-extern bool xbmc_lldv_to_hdr10_fmt;
+extern bool xbmc_aml_linux_force_422;
