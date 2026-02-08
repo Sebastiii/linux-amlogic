@@ -293,9 +293,9 @@ static unsigned int xbmc_dv_profile = 0;
 module_param(xbmc_dv_profile, uint, 0664);
 MODULE_PARM_DESC(xbmc_dv_profile, "\n xbmc_dv_profile\n");
 
-static bool xbmc_dv_hdr10plus_conv = false;
-module_param(xbmc_dv_hdr10plus_conv, bool, 0664);
-MODULE_PARM_DESC(xbmc_dv_hdr10plus_conv, "\n xbmc_dv_hdr10plus_conv\n");
+// static bool xbmc_dv_hdr10plus_conv = false;
+// module_param(xbmc_dv_hdr10plus_conv, bool, 0664);
+// MODULE_PARM_DESC(xbmc_dv_hdr10plus_conv, "\n xbmc_dv_hdr10plus_conv\n");
 
 static unsigned int xbmc_dv_type = 0;
 module_param(xbmc_dv_type, uint, 0664);
@@ -2017,19 +2017,20 @@ static inline size_t reverse_dv_meta(
 
 #define ETSI_META_OFFSET 71
 
-#define LEVEL_3_LENGTH 11
-#define LEVEL_3_DATA         \
-  "\x00\x00\x00\x06"  /* size  */ \
-  "\x03"              /* level */ \
-  "\x08\x00\x08\x00"  /* data  */ \
-  "\x08\x00"          /* data  */
-
 #define LEVEL_5_LENGTH 13
 #define LEVEL_5_DATA         \
   "\x00\x00\x00\x08"  /* size  */ \
   "\x05"              /* level */ \
   "\x00\x00\x00\x00"  /* data  */ \
   "\x00\x00\x00\x00"  /* data  */
+
+#if 0
+#define LEVEL_3_LENGTH 11
+#define LEVEL_3_DATA         \
+  "\x00\x00\x00\x06"  /* size  */ \
+  "\x03"              /* level */ \
+  "\x08\x00\x08\x00"  /* data  */ \
+  "\x08\x00"          /* data  */
 
 #define LEVEL_9_LENGTH 6
 #define LEVEL_9_DATA         \
@@ -2048,6 +2049,7 @@ static inline size_t reverse_dv_meta(
   "\x00\x00\x00\x02"  /* size  */ \
   "\xFE"              /* level */ \
   "\x00\x02"          /* data  */
+#endif
 
 static unsigned char reversed_meta_buffer[CORE_META_LENGTH];
 static unsigned char combo_meta_buffer[CORE_META_LENGTH];
@@ -2103,13 +2105,16 @@ static inline void source_meta_copy(
 
   uint8_t level = 0;
   bool level_1_done = false;
-  bool level_3_done = false;
   bool level_5_done = false;
+  bool allow_level_5_source = (xbmc_meta_level_5 && !(xbmc_meta_level_5_osdst && (dolby_vision_xbmc_osd || dolby_vision_subtitles)));
+
+#if 0
+  bool level_3_done = false;
   bool level_9_done = false;
   bool level_11_done = false;
   bool level_254_done = false;
   bool convert_to_hdr10plus = false;
-  bool allow_level_5_source = (xbmc_meta_level_5 && !(xbmc_meta_level_5_osdst && (dolby_vision_xbmc_osd || dolby_vision_subtitles)));
+#endif
 
   // if ((debug_dolby & 4) && dump_enable)
   //   dump_buffer("DOLBY source_meta_copy: combined ETSI display management metadata BEFORE processing", combo_meta_buffer, combo_meta_size);
@@ -2146,7 +2151,7 @@ static inline void source_meta_copy(
       level_5_done = true;
     }
 
-    if (level != 5 || ((level == 5) && allow_level_5_source))
+    if ((level != 5 || (level == 5 && allow_level_5_source)) && level != 6)
     {
       if (level == 5)
       {
@@ -2170,6 +2175,7 @@ static inline void source_meta_copy(
         case 1:
           level_1_done = true;
           break;
+#if 0
         case 3:
           level_3_done = true;
           break;
@@ -2182,6 +2188,7 @@ static inline void source_meta_copy(
         case 254:
           level_254_done = true;
           break;
+#endif
         default:
           break;
 	  }
@@ -2191,7 +2198,7 @@ static inline void source_meta_copy(
     remaining_input -= level_size;
   }
 
-  convert_to_hdr10plus = (level_1_done && xbmc_dv_hdr10plus_conv);
+  // convert_to_hdr10plus = (level_1_done && xbmc_dv_hdr10plus_conv);
 
   if (!level_5_done && level_1_done)
   {
@@ -2209,6 +2216,7 @@ static inline void source_meta_copy(
     orig_index += LEVEL_5_LENGTH;
   }
 
+#if 0
   if (!level_3_done && convert_to_hdr10plus)
   {
     memcpy(combo_index, LEVEL_3_DATA, LEVEL_3_LENGTH);
@@ -2242,6 +2250,7 @@ static inline void source_meta_copy(
     combo_meta_size += LEVEL_254_LENGTH;
     num_levels++;
   }
+#endif
 
   combo_meta_buffer[ETSI_META_OFFSET-1] = num_levels; // update number of levels.
 
@@ -3339,21 +3348,21 @@ static enum signal_format_enum get_cur_src_format(void)
 static inline int mode_check(int *mode, unsigned int check_mode, enum signal_format_enum src_format, char* log)
 {
   if (dolby_vision_mode != check_mode) {
-    // if (debug_dolby) {
-    //  const char* mode_name = (check_mode < 6) ? dv_mode_str[check_mode] : "UNKNOWN";
-    //  const char* src_name =
-    //   (src_format == FORMAT_INVALID)   ? "INVALID" :
-    //   (src_format == FORMAT_DOVI)      ? "DOVI" :
-    //   (src_format == FORMAT_HDR10)     ? "HDR10" :
-    //   (src_format == FORMAT_SDR)       ? "SDR" :
-    //   (src_format == FORMAT_DOVI_LL)   ? "DOVI_LL" :
-    //   (src_format == FORMAT_HLG)       ? "HLG" :
-    //   (src_format == FORMAT_HDR10PLUS) ? "HDR10PLUS" :
-    //   (src_format == FORMAT_SDR_2020)  ? "SDR_2020" :
-    //   (src_format == FORMAT_MVC)       ? "MVC" :
-    //   (src_format == FORMAT_CUVA)      ? "CUVA" : "UNKNOWN";
+    if (debug_dolby) {
+     const char* mode_name = (check_mode < 6) ? dv_mode_str[check_mode] : "UNKNOWN";
+     const char* src_name =
+      (src_format == FORMAT_INVALID)   ? "INVALID" :
+      (src_format == FORMAT_DOVI)      ? "DOVI" :
+      (src_format == FORMAT_HDR10)     ? "HDR10" :
+      (src_format == FORMAT_SDR)       ? "SDR" :
+      (src_format == FORMAT_DOVI_LL)   ? "DOVI_LL" :
+      (src_format == FORMAT_HLG)       ? "HLG" :
+      (src_format == FORMAT_HDR10PLUS) ? "HDR10PLUS" :
+      (src_format == FORMAT_SDR_2020)  ? "SDR_2020" :
+      (src_format == FORMAT_MVC)       ? "MVC" :
+      (src_format == FORMAT_CUVA)      ? "CUVA" : "UNKNOWN";
     //  pr_dolby_dbg("%s, %s -> %s\n", src_name, log, mode_name);
-    // }
+    }
     *mode = check_mode;
     return 1;
   }
@@ -5708,8 +5717,8 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 					break;
 				}
 			}
-			if ((debug_dolby & 4) && dump_enable) 
-				dump_buffer("DOLBY: DV-LL vsvdb with limit", new_dovi_setting.vsvdb_tbl, new_dovi_setting.vsvdb_len);
+			// if ((debug_dolby & 4) && dump_enable) 
+			//	dump_buffer("DOLBY: DV-LL vsvdb with limit", new_dovi_setting.vsvdb_tbl, new_dovi_setting.vsvdb_len);
 			if (xbmc_dv_hdr10_for_dv_ll && (xbmc_dv_hdr10_for_dv_ll_inject_num < 24) && (xbmc_dv_vp == 0))
 				set_hdr10_data_for_dv_ll();
 		}
@@ -5923,7 +5932,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 		//		frame_count);
 		// }
 
-		// dump_setting(&new_dovi_setting, frame_count, debug_dolby);
+		dump_setting(&new_dovi_setting, frame_count, debug_dolby);
 
 		el_mode = el_flag;
 		mel_mode = mel_flag;
@@ -5946,7 +5955,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 
 		new_dovi_setting.video_width = 0;
 		new_dovi_setting.video_height = 0;
-		pr_dolby_error("control_path(%d, %d) failed %d\n", src_format, dst_format, flag);
+		// pr_dolby_error("control_path(%d, %d) failed %d\n", src_format, dst_format, flag);
 
 		// if ((debug_dolby & 0x2000) && dump_enable && total_md_size > 0)
 		// {
