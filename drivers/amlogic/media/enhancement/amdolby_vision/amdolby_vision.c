@@ -1391,7 +1391,7 @@ static int dolby_core1_set
   if (need_skip_cvm(0)) bypass_flag |= 1 << 2;
   if (el_41_mode) bypass_flag |= 1 << 3;
 
-  if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 2)) bypass_flag |= 1 << 1;
+  if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm == 3)) bypass_flag |= 1 << 1;
   if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 1)) bypass_flag |= 1 << 2;
 
   VSYNC_WR_DV_REG(DOLBY_CORE1_REG_START + 1, 0x70 | bypass_flag); /* bypass CVM and/or CSC */
@@ -1810,7 +1810,7 @@ static int dolby_core3_set
   /*   02- HDR10 output, RGB 10 bit 444 PQ*/
   /*   03- Deep color SDR, RGB 10 bit 444 Gamma*/
   /*   04- SDR, RGB 8 bit 444 Gamma*/
-  if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 3))
+  if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 4))
   {
     VSYNC_WR_DV_REG(DOLBY_CORE3_REG_START + 1, 0x00);
     VSYNC_WR_DV_REG(DOLBY_CORE3_REG_START + 1, 0x00);
@@ -2119,6 +2119,8 @@ static inline void source_meta_copy(
   // if ((debug_dolby & 4) && dump_enable)
   //   dump_buffer("DOLBY source_meta_copy: combined ETSI display management metadata BEFORE processing", combo_meta_buffer, combo_meta_size);
 
+  const struct vinfo_s *vinfo = get_current_vinfo();
+
   while ((orig_index < orig_end_index) &&
          (remaining_input >= 5) &&
          (remaining_space >= 5))
@@ -2137,7 +2139,7 @@ static inline void source_meta_copy(
     if ((level > 5) && !level_5_done && level_1_done)
     {
       memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
-      if ((level5_h_o != 0) && allow_level_5_source)
+      if ((level5_h_o != 0) && allow_level_5_source && (vinfo->height == 2160))
       {
         combo_index[9] = level5_h_o >> 8;
         combo_index[10] = level5_h_o & 0xFF;
@@ -2155,7 +2157,7 @@ static inline void source_meta_copy(
     {
       if (level == 5)
       {
-        if ((level5_h_o == 0) || (level5_h_o != (u16)((orig_index[9] << 8) | orig_index[10])))
+        if ((level5_h_o != (u16)((orig_index[9] << 8) | orig_index[10])) && (vinfo->height == 2160))
         {
           u16 temp_h = level5_h_o + (u16)((orig_index[9] << 8) | orig_index[10]);
           orig_index[9] = temp_h >> 8;
@@ -2203,7 +2205,7 @@ static inline void source_meta_copy(
   if (!level_5_done && level_1_done)
   {
     memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
-    if ((level5_h_o != 0) && allow_level_5_source)
+    if ((level5_h_o != 0) && allow_level_5_source && (vinfo->height == 2160))
     {
       combo_index[9] = level5_h_o >> 8;
       combo_index[10] = level5_h_o & 0xFF;
@@ -3349,18 +3351,18 @@ static inline int mode_check(int *mode, unsigned int check_mode, enum signal_for
 {
   if (dolby_vision_mode != check_mode) {
     if (debug_dolby) {
-     const char* mode_name = (check_mode < 6) ? dv_mode_str[check_mode] : "UNKNOWN";
-     const char* src_name =
-      (src_format == FORMAT_INVALID)   ? "INVALID" :
-      (src_format == FORMAT_DOVI)      ? "DOVI" :
-      (src_format == FORMAT_HDR10)     ? "HDR10" :
-      (src_format == FORMAT_SDR)       ? "SDR" :
-      (src_format == FORMAT_DOVI_LL)   ? "DOVI_LL" :
-      (src_format == FORMAT_HLG)       ? "HLG" :
-      (src_format == FORMAT_HDR10PLUS) ? "HDR10PLUS" :
-      (src_format == FORMAT_SDR_2020)  ? "SDR_2020" :
-      (src_format == FORMAT_MVC)       ? "MVC" :
-      (src_format == FORMAT_CUVA)      ? "CUVA" : "UNKNOWN";
+      const char* mode_name = (check_mode < 6) ? dv_mode_str[check_mode] : "UNKNOWN";
+      const char* src_name =
+       (src_format == FORMAT_INVALID)   ? "INVALID" :
+       (src_format == FORMAT_DOVI)      ? "DOVI" :
+       (src_format == FORMAT_HDR10)     ? "HDR10" :
+       (src_format == FORMAT_SDR)       ? "SDR" :
+       (src_format == FORMAT_DOVI_LL)   ? "DOVI_LL" :
+       (src_format == FORMAT_HLG)       ? "HLG" :
+       (src_format == FORMAT_HDR10PLUS) ? "HDR10PLUS" :
+       (src_format == FORMAT_SDR_2020)  ? "SDR_2020" :
+       (src_format == FORMAT_MVC)       ? "MVC" :
+       (src_format == FORMAT_CUVA)      ? "CUVA" : "UNKNOWN";
     //  pr_dolby_dbg("%s, %s -> %s\n", src_name, log, mode_name);
     }
     *mode = check_mode;
@@ -4228,7 +4230,6 @@ static int parse_sei_and_meta(struct vframe_s *vf,
 		p_md_buf = md_buf[next_id];
 		p_comp_buf = comp_buf[next_id];
 	}
-
 	ret = parse_sei_and_meta_ext(vf,
 				     req->aux_buf,
 				     req->aux_size,
@@ -4248,7 +4249,6 @@ static int parse_sei_and_meta(struct vframe_s *vf,
 		*total_comp_size = backup_comp_size;
 		*total_md_size = backup_md_size;
 	}
-
 	return ret;
 }
 
@@ -4580,23 +4580,19 @@ static inline void extract_dolby_vsvdb_source_lum(u16* min, u16* max)
   switch (version)
   {
     case 0:
-	{
       *min = (x[14] << 4) | (x[13] >> 4);
       *max = (x[15] << 4) | (x[13] & 0x0F);
       break;
-	}
+
     case 1:
-	{
       *min = min_direct_to_pq_lut[(x[2] >> 1)];
       *max = max_direct_to_pq_lut[(x[1] >> 1)];
       break;
-	}
+
     case 2:
-	{
       *min = 20 * (x[1] >> 3);
       *max = 2055 + 65 * (x[2] >> 3);
       break;
-	}
   }
 
   // if ((debug_dolby & 4) && dump_enable)
@@ -5754,12 +5750,20 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 		new_dovi_setting.dovi2hdr10_nomapping = 0;
 
 	/* always use rgb setting */
-	new_dovi_setting.g_bitdepth = 8;
-	new_dovi_setting.g_format = G_SDR_RGB;
+	if (dst_format == FORMAT_SDR)
+	{
+		new_dovi_setting.g_bitdepth = 8;
+		new_dovi_setting.g_format = G_SDR_RGB;
+	}
+	else
+	{
+		new_dovi_setting.g_bitdepth = 10;
+		new_dovi_setting.g_format = G_HDR_RGB;
+	}
 
-	new_dovi_setting.dovi_ll_enable = 0;
 	new_dovi_setting.diagnostic_enable = 0;
 	new_dovi_setting.diagnostic_mux_select = 0;
+	new_dovi_setting.dovi_ll_enable = 0;
 
 	if (vinfo) {
 		new_dovi_setting.vout_width = vinfo->width;
@@ -5816,6 +5820,9 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 		}
 	}
 
+	if ((xbmc_dv_vp == 0) && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)) && (dst_format == FORMAT_SDR))
+		md_buf[current_id][ETSI_META_OFFSET-1] = 0x00;
+	
 	// if ((debug_dolby & 4) && dump_enable)
 	// {
 	//	xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
@@ -7706,9 +7713,7 @@ static int amdolby_vision_probe(struct platform_device *pdev)
 		}
 		ret = of_property_read_u32(of_node, "tv_mode", &val);
 		if (ret)
-		{
 			pr_info("Can't find tv_mode.\n");
-		}
 		else
 		{
 			if (!!val) {

@@ -45,7 +45,6 @@
 #define DRIVER_NAME "meson"
 #define DRIVER_DESC "Amlogic Meson DRM driver"
 
-
 static void am_meson_fb_output_poll_changed(struct drm_device *dev)
 {
 #ifdef CONFIG_DRM_MESON_EMULATE_FBDEV

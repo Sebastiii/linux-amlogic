@@ -667,6 +667,10 @@ static uint hdr2_debug;
 module_param(hdr2_debug, uint, 0664);
 MODULE_PARM_DESC(hdr2_debug, "\n hdr2_debug\n");
 
+static bool osd_pq_bypass;
+module_param(osd_pq_bypass, bool, 0664);
+MODULE_PARM_DESC(osd_pq_bypass, "\n osd_pq_bypass\n");
+
 /* gamut 3x3 matrix*/
 /*standard 2020rgb->709rgb*/
 int ncl_2020_709[9] = {
@@ -2293,12 +2297,12 @@ enum hdr_process_sel hdr_func(
 		/* turn off OSD mtx and use HDR for g12, sm1, tl1 */
 		VSYNC_WRITE_VPP_REG(
 			VPP_WRAP_OSD1_MATRIX_EN_CTRL, 0);
-		if (!is_dolby_vision_on() || is_hdr_tvmode())
+		if (!is_dolby_vision_on() || is_hdr_tvmode() || osd_pq_bypass)
 			hdr_process_select |= RGB_OSD;
 		/*for g12a/g12b osd blend shift rtl bug*/
 		if (is_meson_g12a_cpu() ||
 		    (is_meson_g12b_cpu() && is_meson_rev_a()))
-			always_full_func = true;
+			always_full_func = false;
 	}
 
 	if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {
@@ -2341,7 +2345,8 @@ enum hdr_process_sel hdr_func(
 		hdr_lut_param.hist_en = LUT_OFF;
 	} else if (hdr_process_select & HDR_BYPASS ||
 		   hdr_process_select & HLG_BYPASS ||
-		   hdr_process_select & CUVA_BYPASS) {
+		   hdr_process_select & CUVA_BYPASS ||
+		   (module_sel == OSD1_HDR && osd_pq_bypass)) {
 		for (i = 0; i < HDR2_OETF_LUT_SIZE; i++) {
 			hdr_lut_param.oetf_lut[i] =	oe_y_lut_bypass[i];
 			hdr_lut_param.ogain_lut[i] = oo_y_lut_bypass[i];
@@ -2728,7 +2733,7 @@ enum hdr_process_sel hdr_func(
 				oft_pre_out = bypass_pre;
 				oft_post_out = bypass_pos;
 			} else {
-				coeff_in = rgb2ycbcr_709;
+				coeff_in = rgb2ycbcr_ncl2020;
 				oft_pre_in = rgb2yuvpre;
 				oft_post_in = rgb2yuvpos;
 				oft_pre_out = bypass_pre;

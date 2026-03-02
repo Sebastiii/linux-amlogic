@@ -7567,6 +7567,7 @@ static void di_pre_size_change(unsigned short width,
 static bool need_bypass(struct vframe_s *vf)
 {
 	needbypass_flag = true;
+
 	if ((is_meson_gxl_package_805X() || is_meson_gxl_package_805Y()) &&
 	    is_progressive(vf))
 		return true;
@@ -9543,8 +9544,8 @@ static int di_probe(struct platform_device *pdev)
 
 	dil_set_diffver_flag(0);
 
-       if (get_cpu_type() < MESON_CPU_MAJOR_ID_G12A)
-               bypass_all = 1;
+	if (get_cpu_type() < MESON_CPU_MAJOR_ID_G12A)
+		bypass_all = 1;
 
 	di_pr_info("%s:ok\n", __func__);
 	return ret;
