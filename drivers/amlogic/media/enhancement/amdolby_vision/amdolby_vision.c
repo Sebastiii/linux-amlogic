@@ -361,6 +361,10 @@ static unsigned int xbmc_dv_vp_tm = 0;
 module_param(xbmc_dv_vp_tm, uint, 0664);
 MODULE_PARM_DESC(xbmc_dv_vp_tm, "\n xbmc_dv_vp_tm\n");
 
+bool aml_linux_osd_sdr8 = true;
+module_param(aml_linux_osd_sdr8, bool, 0664);
+MODULE_PARM_DESC(aml_linux_osd_sdr8, "\n aml_linux_osd_sdr8\n");
+
 // extern
 
 unsigned int xbmc_dv_vp = 0;
@@ -2106,6 +2110,7 @@ static inline void source_meta_copy(
   uint8_t level = 0;
   bool level_1_done = false;
   bool level_5_done = false;
+  bool level_8_done = false;
   bool allow_level_5_source = (xbmc_meta_level_5 && !(xbmc_meta_level_5_osdst && (dolby_vision_xbmc_osd || dolby_vision_subtitles)));
 
 #if 0
@@ -2121,11 +2126,12 @@ static inline void source_meta_copy(
 
   const struct vinfo_s *vinfo = get_current_vinfo();
 
+  size_t level_size_prev = 0;
+
   while ((orig_index < orig_end_index) &&
          (remaining_input >= 5) &&
          (remaining_space >= 5))
   {
-
     size_t level_size = be32_to_cpup((__be32 *)orig_index);
     level = orig_index[4];
     level_size += 5; // complete level size includes the space for the size information itself (4) and level (1)
@@ -2136,10 +2142,10 @@ static inline void source_meta_copy(
       break;
     }
 
-    if ((level > 5) && !level_5_done && level_1_done)
+    if (level_1_done && !level_5_done && (level > 5))
     {
       memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
-      if ((level5_h_o != 0) && allow_level_5_source && (vinfo->height == 2160))
+      if (allow_level_5_source && (level5_h_o != 0) &&  (vinfo->height == 2160))
       {
         combo_index[9] = level5_h_o >> 8;
         combo_index[10] = level5_h_o & 0xFF;
@@ -2153,7 +2159,13 @@ static inline void source_meta_copy(
       level_5_done = true;
     }
 
-    if ((level != 5 || (level == 5 && allow_level_5_source)) && level != 6)
+    level_8_done = ((level == 8) && (level_size_prev != 0) && (level_size_prev != level_size));
+
+    if (((level > 0) && (level < 5)) ||
+        (allow_level_5_source && (level == 5)) ||
+        (level == 7) ||
+        (!level_8_done && (level == 8)) ||
+        ((level > 8) && (level < 256)))
     {
       if (level == 5)
       {
@@ -2176,6 +2188,9 @@ static inline void source_meta_copy(
       {
         case 1:
           level_1_done = true;
+          break;
+        case 8:
+          level_size_prev = level_size;
           break;
 #if 0
         case 3:
@@ -2202,10 +2217,10 @@ static inline void source_meta_copy(
 
   // convert_to_hdr10plus = (level_1_done && xbmc_dv_hdr10plus_conv);
 
-  if (!level_5_done && level_1_done)
+  if (level_1_done && !level_5_done)
   {
     memcpy(combo_index, LEVEL_5_DATA, LEVEL_5_LENGTH);
-    if ((level5_h_o != 0) && allow_level_5_source && (vinfo->height == 2160))
+    if (allow_level_5_source && (level5_h_o != 0) && (vinfo->height == 2160))
     {
       combo_index[9] = level5_h_o >> 8;
       combo_index[10] = level5_h_o & 0xFF;
@@ -2980,6 +2995,7 @@ static struct vframe_s *dv_vf[16][2];
 static void *metadata_parser;
 static bool metadata_parser_reset_flag;
 static char meta_buf[1024];
+static bool dvel_provider_is_dveldec;
 
 static int dvel_receiver_event_fun(int type, void *data, void *arg)
 {
@@ -2989,6 +3005,7 @@ static int dvel_receiver_event_fun(int type, void *data, void *arg)
 
 	if (type == VFRAME_EVENT_PROVIDER_UNREG) {
 		pr_info("%s, provider %s unregistered\n", __func__, provider_name);
+		dvel_provider_is_dveldec = false;
 		spin_lock_irqsave(&dovi_lock, flags);
 		for (i = 0; i < 16; i++) {
 			if (dv_vf[i][0]) {
@@ -3012,6 +3029,7 @@ static int dvel_receiver_event_fun(int type, void *data, void *arg)
 		return RECEIVER_ACTIVE;
 	} else if (type == VFRAME_EVENT_PROVIDER_REG) {
 		pr_info("%s, provider %s registered\n", __func__, provider_name);
+		dvel_provider_is_dveldec = provider_name && !strcmp(provider_name, "dveldec");
 		spin_lock_irqsave(&dovi_lock, flags);
 		for (i = 0; i < 16; i++)
 			dv_vf[i][0] = dv_vf[i][1] = NULL;
@@ -3464,12 +3482,14 @@ static int dolby_vision_policy_process
 }
 
 static char dv_provider[32] = "dvbldec";
+static bool dv_provider_is_dvbldec = true;
 
 void dolby_vision_set_provider(char *prov_name)
 {
 	if (prov_name && strlen(prov_name) < 32) {
 		if (strcmp(dv_provider, prov_name)) {
 			strcpy(dv_provider, prov_name);
+			dv_provider_is_dvbldec = !strcmp(dv_provider, "dvbldec");
 			// pr_dolby_dbg("provider changed to %s\n", dv_provider);
 		}
 	}
@@ -3500,7 +3520,7 @@ int is_dovi_frame(struct vframe_s *vf)
 	req.low_latency = 0;
 
 	if (vf->source_type == VFRAME_SOURCE_TYPE_OTHERS) {
-		if (!strcmp(dv_provider, "dvbldec"))
+		if (dv_provider_is_dvbldec)
 			vf_notify_provider_by_name
 				(dv_provider,
 				 VFRAME_EVENT_RECEIVER_GET_AUX_DATA,
@@ -3548,7 +3568,7 @@ bool is_dovi_dual_layer_frame(struct vframe_s *vf)
 	req.dv_enhance_exist = 0;
 
 	if (vf->source_type == VFRAME_SOURCE_TYPE_OTHERS) {
-		if (!strcmp(dv_provider, "dvbldec"))
+		if (dv_provider_is_dvbldec)
 			vf_notify_provider_by_name(dv_provider,
 			 VFRAME_EVENT_RECEIVER_GET_AUX_DATA,
 			 (void *)&req);
@@ -5174,7 +5194,6 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 	unsigned long time_use = 0;
 	struct timeval start;
 	struct timeval end;
-	char *dvel_provider = NULL;
 
 	memset(&req, 0, (sizeof(struct provider_aux_req_s)));
 	memset(&el_req, 0, (sizeof(struct provider_aux_req_s)));
@@ -5272,7 +5291,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 
 			if (ret_flags && req.dv_enhance_exist) {
 
-				if (!strcmp(dv_provider, "dvbldec"))
+				if (dv_provider_is_dvbldec)
 					vf_notify_provider_by_name(
 						dv_provider,
 					 	VFRAME_EVENT_RECEIVER_DOLBY_BYPASS_EL,
@@ -5351,10 +5370,8 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 
 		/* check dvel decoder is active, if active, should */
 		/* get/put el data, otherwise, dvbl is stuck */
-		dvel_provider = vf_get_provider_name(DVEL_RECV_NAME);
-
 		if (req.dv_enhance_exist && toggle_mode == 1 &&
-		    dvel_provider && !strcmp(dvel_provider, "dveldec"))
+		    dvel_provider_is_dveldec)
 		{
 			el_vf = dvel_vf_get();
 			if (el_vf && ((el_vf->pts_us64 == vf->pts_us64) ||
@@ -5373,7 +5390,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 					el_req.aux_buf = NULL;
 					el_req.aux_size = 0;
 
-					if (!strcmp(dv_provider, "dvbldec"))
+					if (dv_provider_is_dvbldec)
 						vf_notify_provider_by_name(
 						   "dveldec",
 						   VFRAME_EVENT_RECEIVER_GET_AUX_DATA,
@@ -5750,7 +5767,7 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 		new_dovi_setting.dovi2hdr10_nomapping = 0;
 
 	/* always use rgb setting */
-	if (dst_format == FORMAT_SDR)
+	if (aml_linux_osd_sdr8)
 	{
 		new_dovi_setting.g_bitdepth = 8;
 		new_dovi_setting.g_format = G_SDR_RGB;
@@ -5780,16 +5797,20 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 	if ((xbmc_dv_vp != 0) && (xbmc_dv_vp_tm > 1) && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)))
 	{
 		new_dovi_setting.use_ll_flag = 0;
+		md_buf[current_id][ETSI_META_OFFSET-1] = 0x00;
 		dolby_vision_target_max[FORMAT_DOVI][FORMAT_DOVI] = 10000;
 	}
 
-	if ((xbmc_dv_vp == 0) && is_dv_ll() && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)))
+	if ((xbmc_dv_vp == 0) && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)) && is_dv_ll())
 	{
 		unsigned char* temp_index = md_buf[current_id] + ETSI_META_OFFSET;
 		unsigned char* md_index = md_buf[current_id] + ETSI_META_OFFSET;
 		unsigned char* md_end_index = md_buf[current_id] + total_md_size;	
 		size_t remaining_input = total_md_size - ETSI_META_OFFSET;
 		size_t remaining_space = total_md_size - ETSI_META_OFFSET;
+		uint8_t num_levels = 0;
+		const bool in_scope = (dst_format == FORMAT_SDR);
+		
 		while ((md_index < md_end_index) &&
 				(remaining_input >= 5) &&
 				(remaining_space >= 5))
@@ -5802,27 +5823,40 @@ int dolby_vision_parse_metadata(struct vframe_s *vf,
 				pr_err("source_meta_dtm - invalid metadata: Level size exceeds remaining space or input\n");
 				break;
 			}
-			if ((level == 1) && (((temp_index[5] << 8) | temp_index[6]) < 17))
+			if ((level == 1) && (((temp_index[5] << 8) | temp_index[6]) < 17) && !in_scope)
 			{
 				temp_index[5] = 0x00;
 				temp_index[6] = 0x11;
 				memcpy(md_index, temp_index, level_size);
 				temp_index += level_size;
 				remaining_space -= level_size;
+				num_levels++;
 			}
-			else
+			else if ((level >= 1) && !in_scope)
 			{
 				temp_index += level_size;
 				remaining_space -= level_size;
+				num_levels++;
+			}
+			else if ((level == 1) && in_scope && ((((md_buf[current_id][66] << 8) | md_buf[current_id][67]) > 3079) ||
+													(((temp_index[7] << 8) | temp_index[8]) > ((md_buf[current_id][66] << 8) | md_buf[current_id][67]))))
+			{
+				if (((temp_index[5] << 8) | temp_index[6]) < 17)
+				{
+					temp_index[5] = 0x00;
+					temp_index[6] = 0x11;
+					memcpy(md_index, temp_index, level_size);
+				}
+				temp_index += level_size;
+				remaining_space -= level_size;
+				num_levels++;				
 			}
 			md_index += level_size;
 			remaining_input -= level_size;
 		}
+		md_buf[current_id][ETSI_META_OFFSET-1] = num_levels;
 	}
 
-	if ((xbmc_dv_vp == 0) && ((src_format == FORMAT_DOVI) || (src_format == FORMAT_DOVI_LL)) && (dst_format == FORMAT_SDR))
-		md_buf[current_id][ETSI_META_OFFSET-1] = 0x00;
-	
 	// if ((debug_dolby & 4) && dump_enable)
 	// {
 	//	xbmc_dv_md_source_max_pq = ((md_buf[current_id][66] << 8) | md_buf[current_id][67]);
