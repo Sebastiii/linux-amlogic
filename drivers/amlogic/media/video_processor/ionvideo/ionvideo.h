@@ -58,7 +58,7 @@
 
 #define IONVIDEO_POOL_SIZE 32
 
-#define IONVID_INFO(fmt, args...) pr_info("ionvid: info: "fmt"", ## args)
+#define IONVID_INFO(fmt, args...) pr_debug("ionvid: info: "fmt"", ## args)
 #define IONVID_DBG(fmt, args...) pr_debug("ionvid: dbg: "fmt"", ## args)
 #define IONVID_ERR(fmt, args...) pr_err("ionvid: err: "fmt"", ## args)
 

@@ -749,7 +749,8 @@
 			 "MMC_CAP_UHS_SDR25",
 			 "MMC_CAP_UHS_SDR50",
 			 "MMC_PM_KEEP_POWER",
-			 "MMC_CAP_NONREMOVABLE"; /**ptm debug */
+			 "MMC_CAP_NONREMOVABLE", /**ptm debug */
+			 "MMC_CAP_ERASE";
 		f_min = <400000>;
 		f_max = <200000000>;
 	};

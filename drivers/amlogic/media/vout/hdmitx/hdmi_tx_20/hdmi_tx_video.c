@@ -953,15 +953,15 @@ int hdmitx_set_display(struct hdmitx_dev *hdev, enum hdmi_vic VideoCode)
 	vic = hdev->hwop.getstate(hdev, STAT_VIDEO_VIC, 0);
 	if (hdev->vend_id_hit)
 		pr_info(VID "special tv detected\n");
-	pr_info(VID "already init VIC = %d  Now VIC = %d\n",
+	pr_debug(VID "already init VIC = %d  Now VIC = %d\n",
 		vic, VideoCode);
 	if ((vic != HDMI_Unknown) && (vic == VideoCode))
 		hdev->cur_VIC = vic;
 
 	param = hdmi_get_video_param(VideoCode);
-	param->color_depth = hdev->para->cd;
 	hdev->cur_video_param = param;
 	if (param) {
+		param->color_depth = hdev->para->cd;
 		param->color = param->color_prefer;
 		/* HDMI CT 7-24 Pixel Encoding
 		 * YCbCr to YCbCr Sink
@@ -1013,7 +1013,7 @@ int hdmitx_set_display(struct hdmitx_dev *hdev, enum hdmi_vic VideoCode)
 				hdev->hwop.cntlconfig(hdev,
 					CONF_HDMI_DVI_MODE, DVI_MODE);
 			} else {
-				pr_info(VID "Sink is HDMI device\n");
+				pr_debug(VID "Sink is HDMI device\n");
 				hdev->hwop.cntlconfig(hdev,
 					CONF_HDMI_DVI_MODE, HDMI_MODE);
 			}

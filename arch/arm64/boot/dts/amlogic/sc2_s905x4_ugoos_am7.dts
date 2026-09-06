@@ -176,3 +176,10 @@
 &sd_emmc_b {
 	status = "disabled";
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "Ugoos";
+		product_desc = "AM7";
+	};
+};

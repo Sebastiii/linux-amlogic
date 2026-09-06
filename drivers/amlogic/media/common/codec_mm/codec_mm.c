@@ -34,6 +34,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
 #include <linux/delay.h>
+#include <linux/workqueue.h>
+#include <linux/shrinker.h>
 
 #include <linux/amlogic/media/codec_mm/codec_mm.h>
 #include <linux/amlogic/media/codec_mm/codec_mm_scatter.h>
@@ -97,6 +99,8 @@ static int dump_free_mem_infos(void *buf, int size);
  *trace memory alloc/free info:0x20,
  */
 static u32 debug_mode;
+static int cma_cache_max_mb = 96;
+static int cma_cache_timeout_ms = 2000;
 
 static u32 debug_sc_mode;
 u32 codec_mm_get_sc_debug_mode(void)
@@ -150,6 +154,10 @@ struct codec_mm_mgt_s {
 	struct gen_pool *res_pool;
 	struct extpool_mgt_s tvp_pool;
 	struct extpool_mgt_s cma_res_pool;
+	struct list_head cma_cache_list;
+	int cma_cached_size;
+	struct delayed_work cma_cache_work;
+	struct shrinker cma_cache_shrinker;
 	struct reserved_mem rmem;
 	int total_codec_mem_size;
 	int total_alloced_size;
@@ -874,11 +882,180 @@ static void codec_mm_free_in(struct codec_mm_mgt_s *mgt,
 	return;
 }
 
+#define CMA_CACHE_FLAG_MASK (CODEC_MM_FLAGS_CPU | CODEC_MM_FLAGS_FOR_PHYS_VMAPED)
+
+static struct codec_mm_s *codec_mm_cache_get(struct codec_mm_mgt_s *mgt,
+	const char *owner, int page_count, int align2n, int memflags)
+{
+	unsigned long flags;
+	struct codec_mm_s *mem;
+	int align = align2n < PAGE_SHIFT ? PAGE_SHIFT : align2n;
+
+	if (cma_cache_max_mb <= 0 ||
+		(memflags & (CODEC_MM_FLAGS_TVP | CODEC_MM_FLAGS_FOR_SCATTER |
+		CODEC_MM_FLAGS_FOR_LOCAL_MGR | CODEC_MM_FLAGS_RESERVED)))
+		return NULL;
+
+	spin_lock_irqsave(&mgt->lock, flags);
+	list_for_each_entry(mem, &mgt->cma_cache_list, list) {
+		int ma = mem->align2n < PAGE_SHIFT ? PAGE_SHIFT : mem->align2n;
+
+		if (mem->page_count != page_count || ma < align)
+			continue;
+		if ((mem->flags & CMA_CACHE_FLAG_MASK) !=
+			(memflags & CMA_CACHE_FLAG_MASK))
+			continue;
+		list_del(&mem->list);
+		mgt->cma_cached_size -= mem->buffer_size;
+		INIT_LIST_HEAD(&mem->release_cb_list);
+		atomic_set(&mem->use_cnt, 1);
+		mem->owner[0] = owner;
+		mem->mem_id = mgt->global_memid++;
+		list_add_tail(&mem->list, &mgt->mem_list);
+		spin_unlock_irqrestore(&mgt->lock, flags);
+		mem->alloced_jiffies = get_jiffies_64();
+		if (debug_mode & 0x40)
+			pr_info("codec_mm cache reuse %d MB for %s\n",
+				mem->buffer_size >> 20, owner);
+		return mem;
+	}
+	spin_unlock_irqrestore(&mgt->lock, flags);
+	return NULL;
+}
+
+static bool codec_mm_cache_put(struct codec_mm_mgt_s *mgt,
+	struct codec_mm_s *mem)
+{
+	unsigned long flags;
+	int cap = cma_cache_max_mb * SZ_1M;
+
+	if (mgt->total_cma_size > 0 && cap > mgt->total_cma_size / 4)
+		cap = mgt->total_cma_size / 4;
+
+	if (cap <= 0 ||
+		mem->from_flags != AMPORTS_MEM_FLAGS_FROM_GET_FROM_CMA ||
+		(mem->flags & (CODEC_MM_FLAGS_TVP | CODEC_MM_FLAGS_FOR_SCATTER |
+		CODEC_MM_FLAGS_FOR_LOCAL_MGR)) ||
+		mem->buffer_size > cap)
+		return false;
+
+	spin_lock_irqsave(&mgt->lock, flags);
+	if (mgt->cma_cached_size + mem->buffer_size > cap) {
+		spin_unlock_irqrestore(&mgt->lock, flags);
+		return false;
+	}
+	mem->owner[0] = NULL;
+	list_add_tail(&mem->list, &mgt->cma_cache_list);
+	mgt->cma_cached_size += mem->buffer_size;
+	spin_unlock_irqrestore(&mgt->lock, flags);
+
+	if (debug_mode & 0x40)
+		pr_info("codec_mm cache keep %d MB (cached %d MB)\n",
+			mem->buffer_size >> 20, mgt->cma_cached_size >> 20);
+
+	if (cma_cache_timeout_ms > 0)
+		mod_delayed_work(system_wq, &mgt->cma_cache_work,
+			msecs_to_jiffies(cma_cache_timeout_ms));
+	return true;
+}
+
+static int codec_mm_cache_flush_all(struct codec_mm_mgt_s *mgt)
+{
+	unsigned long flags;
+	struct codec_mm_s *mem, *tmp;
+	LIST_HEAD(fl);
+	int freed = 0;
+
+	spin_lock_irqsave(&mgt->lock, flags);
+	list_splice_init(&mgt->cma_cache_list, &fl);
+	mgt->cma_cached_size = 0;
+	spin_unlock_irqrestore(&mgt->lock, flags);
+
+	list_for_each_entry_safe(mem, tmp, &fl, list) {
+		freed += mem->buffer_size;
+		codec_mm_free_in(mgt, mem);
+		kfree(mem);
+	}
+	return freed;
+}
+
+static int codec_mm_cache_flush_count(struct codec_mm_mgt_s *mgt,
+	unsigned long nr_pages)
+{
+	unsigned long flags;
+	struct codec_mm_s *mem, *tmp;
+	LIST_HEAD(fl);
+	unsigned long freed_pages = 0;
+	int freed = 0;
+
+	spin_lock_irqsave(&mgt->lock, flags);
+	while (freed_pages < nr_pages &&
+		!list_empty(&mgt->cma_cache_list)) {
+		mem = list_first_entry(&mgt->cma_cache_list,
+			struct codec_mm_s, list);
+		list_del(&mem->list);
+		mgt->cma_cached_size -= mem->buffer_size;
+		freed_pages += mem->buffer_size >> PAGE_SHIFT;
+		list_add_tail(&mem->list, &fl);
+	}
+	spin_unlock_irqrestore(&mgt->lock, flags);
+
+	list_for_each_entry_safe(mem, tmp, &fl, list) {
+		freed += mem->buffer_size;
+		codec_mm_free_in(mgt, mem);
+		kfree(mem);
+	}
+	return freed;
+}
+
+static void codec_mm_cache_reaper(struct work_struct *work)
+{
+	struct codec_mm_mgt_s *mgt = container_of(to_delayed_work(work),
+		struct codec_mm_mgt_s, cma_cache_work);
+	int freed = codec_mm_cache_flush_all(mgt);
+
+	if ((debug_mode & 0x40) && freed)
+		pr_info("codec_mm cache reaped %d MB\n", freed >> 20);
+}
+
+static unsigned long codec_mm_cache_shrink_count(struct shrinker *s,
+	struct shrink_control *sc)
+{
+	struct codec_mm_mgt_s *mgt = get_mem_mgt();
+
+	return mgt->cma_cached_size >> PAGE_SHIFT;
+}
+
+static unsigned long codec_mm_cache_shrink_scan(struct shrinker *s,
+	struct shrink_control *sc)
+{
+	struct codec_mm_mgt_s *mgt = get_mem_mgt();
+	int freed = codec_mm_cache_flush_count(mgt, sc->nr_to_scan);
+
+	if (debug_mode & 0x40)
+		pr_info("codec_mm cache shrink: asked %lu pages, freed %d MB\n",
+			sc->nr_to_scan, freed >> 20);
+	if (freed <= 0)
+		return SHRINK_STOP;
+	return freed >> PAGE_SHIFT;
+}
+
 struct codec_mm_s *codec_mm_alloc(const char *owner, int size,
 	int align2n, int memflags)
 {
 	struct codec_mm_mgt_s *mgt = get_mem_mgt();
-	struct codec_mm_s *mem = kmalloc(sizeof(struct codec_mm_s),
+	struct codec_mm_s *mem;
+
+	if (debug_mode && size >= (1 << 20))
+		pr_info("codec_mm_alloc: owner=%s size=%d (%d MB) flags=0x%x\n",
+			owner, size, size >> 20, memflags);
+
+	mem = codec_mm_cache_get(mgt, owner, PAGE_ALIGN(size) / PAGE_SIZE,
+		align2n, memflags);
+	if (mem)
+		return mem;
+
+	mem = kmalloc(sizeof(struct codec_mm_s),
 		GFP_KERNEL);
 	int count;
 	int ret;
@@ -914,6 +1091,10 @@ struct codec_mm_s *codec_mm_alloc(const char *owner, int size,
 	mem->flags = memflags;
 	INIT_LIST_HEAD(&mem->release_cb_list);
 	ret = codec_mm_alloc_in(mgt, mem);
+	if (ret < 0 && mgt->cma_cached_size > 0) {
+		codec_mm_cache_flush_all(mgt);
+		ret = codec_mm_alloc_in(mgt, mem);
+	}
 	if (ret < 0 &&
 		mgt->alloced_for_sc_cnt > 0 && /*have used for scatter.*/
 		!(memflags & CODEC_MM_FLAGS_FOR_SCATTER)) {
@@ -998,6 +1179,10 @@ void codec_mm_release(struct codec_mm_s *mem, const char *owner)
 	const char *max_owner;
 	struct codec_mm_mgt_s *mgt = get_mem_mgt();
 
+	if (debug_mode && mem && mem->buffer_size >= (1 << 20))
+		pr_info("codec_mm_release: owner=%s size=%d (%d MB)\n",
+			owner, mem->buffer_size, mem->buffer_size >> 20);
+
 	if (!mem)
 		return;
 
@@ -1027,6 +1212,8 @@ void codec_mm_release(struct codec_mm_s *mem, const char *owner)
 			cur->func(mem, cur);
 		}
 		spin_unlock_irqrestore(&mgt->lock, flags);
+		if (codec_mm_cache_put(mgt, mem))
+			return;
 		codec_mm_free_in(mgt, mem);
 		kfree(mem);
 		return;
@@ -2080,6 +2267,13 @@ static int dump_mem_infos(void *buf, int size)
 	tsize += s;
 	pbuf += s;
 
+	s = snprintf(pbuf, size - tsize,
+		"\tCMA cache cached:%d MB (max %d MB)\n",
+		mgt->cma_cached_size / SZ_1M,
+		cma_cache_max_mb);
+	tsize += s;
+	pbuf += s;
+
 	if (mgt->res_pool) {
 		s = snprintf(pbuf, size - tsize,
 			"\t[%d]RES size:%d MB,alloced:%d MB free:%d MB\n",
@@ -2622,6 +2816,13 @@ int codec_mm_mgt_init(struct device *dev)
 	struct codec_mm_mgt_s *mgt = get_mem_mgt();
 
 	INIT_LIST_HEAD(&mgt->mem_list);
+	INIT_LIST_HEAD(&mgt->cma_cache_list);
+	INIT_DELAYED_WORK(&mgt->cma_cache_work, codec_mm_cache_reaper);
+	mgt->cma_cache_shrinker.count_objects = codec_mm_cache_shrink_count;
+	mgt->cma_cache_shrinker.scan_objects = codec_mm_cache_shrink_scan;
+	mgt->cma_cache_shrinker.seeks = DEFAULT_SEEKS;
+	if (register_shrinker(&mgt->cma_cache_shrinker))
+		pr_err("codec_mm: cma cache shrinker register failed\n");
 	mgt->dev = dev;
 	mgt->alloc_from_sys_pages_max = 4;
 	if (mgt->rmem.size > 0) {
@@ -3287,6 +3488,8 @@ RESERVEDMEM_OF_DECLARE(codec_mm_reserved, "amlogic, codec-mm-reserved",
 	codec_mm_res_setup);
 
 module_param(debug_mode, uint, 0664);
+module_param(cma_cache_max_mb, int, 0664);
+module_param(cma_cache_timeout_ms, int, 0664);
 MODULE_PARM_DESC(debug_mode, "\n debug module\n");
 module_param(debug_sc_mode, uint, 0664);
 MODULE_PARM_DESC(debug_sc_mode, "\n debug scatter module\n");

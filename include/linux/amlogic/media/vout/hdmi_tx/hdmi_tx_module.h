@@ -328,6 +328,10 @@ struct hdmitx_dev {
 	struct delayed_work work_rxsense;
 	struct delayed_work work_internal_intr;
 	struct delayed_work work_cedst;
+	struct delayed_work work_aud_reassert;
+	struct delayed_work work_sink_probe;
+	unsigned long last_modeset_jiffies;
+	unsigned int sink_probe_vic;
 	struct work_struct work_hdr;
 	struct delayed_work work_do_hdcp;
 #ifdef CONFIG_AML_HDMI_TX_14

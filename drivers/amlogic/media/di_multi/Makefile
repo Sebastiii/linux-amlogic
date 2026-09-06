@@ -2,8 +2,6 @@
 ifeq ($(TARGET_BUILD_VARIANT),userdebug)
 ccflags-y := -D DEBUG_SUPPORT
 ccflags-y := -DDEBUG
-else
-ccflags-y := -DDEBUG
 endif
 ccflags-y += -I.
 CFLAGS_dim.o := -I$(src)

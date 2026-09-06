@@ -25,6 +25,7 @@
 #include <linux/amlogic/media/di/di_interface.h>
 
 #include <linux/kfifo.h>	/*ary add*/
+#include <linux/ratelimit.h>
 
 #include "../deinterlace/di_pqa.h"
 //#include "di_pqa.h"
@@ -2140,17 +2141,19 @@ extern unsigned int di_dbg;
 
 #define dbg_m(mark, fmt, args ...)		\
 	do {					\
+		static DEFINE_RATELIMIT_STATE(_dbg_m_rs, HZ, 1); \
 		if (di_dbg & DBG_M_C_ALL)	\
 			break;			\
-		if ((di_dbg & DBG_M_O_ALL) ||	\
-		    (di_dbg & (mark))) {		\
+		if (((di_dbg & DBG_M_O_ALL) ||	\
+		     (di_dbg & (mark))) &&	\
+		    __ratelimit(&_dbg_m_rs)) {	\
 			pr_info("dim:" fmt, ##args); \
 		}				\
 	} while (0)
 
 #define PR_ERR(fmt, args ...)		pr_err("dim:err:" fmt, ##args)
 #define PR_WARN(fmt, args ...)		pr_err("dim:warn:" fmt, ##args)
-#define PR_INF(fmt, args ...)		pr_info("dim:" fmt, ##args)
+#define PR_INF(fmt, args ...)		pr_debug("dim:" fmt, ##args)
 
 #define dbg_dt(fmt, args ...)		dbg_m(DBG_M_DT, fmt, ##args)
 #define dbg_reg(fmt, args ...)		dbg_m(DBG_M_REG, fmt, ##args)

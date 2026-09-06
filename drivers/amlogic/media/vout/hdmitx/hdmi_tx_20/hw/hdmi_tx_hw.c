@@ -662,7 +662,7 @@ static irqreturn_t intr_handler(int irq, void *dev)
 	hdmitx_wr_reg(HDMITX_TOP_INTR_STAT_CLR, ~0);
 	hdmitx_wr_reg(HDMITX_DWC_HDCP22REG_STAT, 0xff);
 
-	pr_info(SYS "irq %x %x\n", dat_top, dat_dwc);
+	pr_debug(SYS "irq %x %x\n", dat_top, dat_dwc);
 
 	if (hdev->hpd_lock == 1) {
 		pr_info(HW "HDMI hpd locked\n");
@@ -2005,7 +2005,7 @@ do { \
 
 static void set_tmds_clk_div40(unsigned int div40)
 {
-	pr_info(HW "div40: %d\n", div40);
+	pr_debug(HW "div40: %d\n", div40);
 	if (div40) {
 		hdmitx_wr_reg(HDMITX_TOP_TMDS_CLK_PTTN_01, 0);
 		hdmitx_wr_reg(HDMITX_TOP_TMDS_CLK_PTTN_23, 0x03ff03ff);
@@ -2516,7 +2516,7 @@ static void set_aud_chnls(struct hdmitx_dev *hdev, struct hdmitx_audpara *audio_
 {
 	int i;
 
-	pr_info(HW "set channel status\n");
+	pr_debug(HW "set channel status\n");
 
 	for (i = 0; i < 9; i++)
 		/* First, set all status to 0 */
@@ -2640,7 +2640,7 @@ static void set_aud_acr_pkt(struct hdmitx_dev *hdev,
 	else
 		aud_n_para = hdmi_get_aud_n_paras(audio_param->sample_rate,
 			hdev->para->cd, char_rate);
-	pr_info(HW "aud_n_para = %d\n", aud_n_para);
+	pr_debug(HW "aud_n_para = %d\n", aud_n_para);
 
 	/* ACR packet configuration */
 	data32 = 0;
@@ -2741,7 +2741,7 @@ static int hdmitx_set_audmode(struct hdmitx_dev *hdev,
 	if (!hdev) return 0;
 	if (!audio_param) return 0;
 
-	pr_info(HW "set audio\n");
+	pr_debug(HW "set audio\n");
 
 	memcpy(&hdmiaud_config_data, audio_param, sizeof(struct hdmitx_audpara));
 	
@@ -2767,7 +2767,7 @@ static int hdmitx_set_audmode(struct hdmitx_dev *hdev,
 	if (hdev->aud_output_ch)
 		hdev->tx_aud_src = 1;
 
-	pr_info(HW "hdmitx tx_aud_src = %d, audio_param->channel_num = %u, hdev->aud_output_ch = %u\n", hdev->tx_aud_src, audio_param->channel_num, hdev->aud_output_ch);
+	pr_debug(HW "hdmitx tx_aud_src = %d, audio_param->channel_num = %u, hdev->aud_output_ch = %u\n", hdev->tx_aud_src, audio_param->channel_num, hdev->aud_output_ch);
 	
 	/* config IP */
 	/* Configure audio */
@@ -2840,7 +2840,7 @@ static int hdmitx_set_audmode(struct hdmitx_dev *hdev,
 
 	data32 = hdmitx_rd_reg(HDMITX_DWC_FC_PACKET_TX_EN);
 
-	pr_info(HW "[0x10e3] = 0x%x\n", data32);
+	pr_debug(HW "[0x10e3] = 0x%x\n", data32);
 
 	set_aud_fifo_rst();
 	udelay(10);
@@ -2850,7 +2850,7 @@ static int hdmitx_set_audmode(struct hdmitx_dev *hdev,
 	data32 = hdmitx_rd_reg(HDMITX_DWC_FC_PACKET_TX_EN);
 	if ((data32 & 0x9) == 0x8) {
 		hdmitx_set_reg_bits(HDMITX_DWC_FC_PACKET_TX_EN, 1, 0, 1);
-		pr_info(HW "enable ACR: [0x10e3] = 0x%x\n", data32);
+		pr_debug(HW "enable ACR: [0x10e3] = 0x%x\n", data32);
 	}
 	hdmitx_set_reg_bits(HDMITX_DWC_FC_DATAUTO3, 1, 0, 1);
 
@@ -3003,7 +3003,7 @@ do { \
 	for (addr = start; addr < end + 1; addr++) { \
 		val = hdmitx_rd_reg(addr); \
 		if (val) \
-			pr_info("[0x%08x]: 0x%08x\n", addr, val); \
+			pr_debug("[0x%08x]: 0x%08x\n", addr, val); \
 	} \
 } while (0)
 
@@ -5462,7 +5462,7 @@ static void hdmitx_set_hw(struct hdmitx_dev *hdev)
 		return;
 	}
 
-	pr_info(HW " config hdmitx IP vic = %d cd:%d cs: %d\n", vic,
+	pr_debug(HW " config hdmitx IP vic = %d cd:%d cs: %d\n", vic,
 		hdev->para->cd, hdev->para->cs);
 
 	config_hdmi20_tx(vic, hdev,

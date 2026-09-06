@@ -22,7 +22,7 @@
 
 /*#define VPU_DEBUG_PRINT*/
 
-#define VPUPR(fmt, args...)     pr_info("vpu: "fmt"", ## args)
+#define VPUPR(fmt, args...)     pr_debug("vpu: "fmt"", ## args)
 #define VPUERR(fmt, args...)    pr_err("vpu: error: "fmt"", ## args)
 
 enum vpu_chip_e {

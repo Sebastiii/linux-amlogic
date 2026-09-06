@@ -25,3 +25,10 @@
 &i2c3 {
 	/delete-node/ bct3236@3c;
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "RockTek";
+		product_desc = "G2";
+	};
+};

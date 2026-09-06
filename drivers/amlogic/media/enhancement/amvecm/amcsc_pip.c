@@ -1283,6 +1283,12 @@ static int notify_vd_signal_to_amvideo(struct vd_signal_info_s *vd_signal)
 
 static unsigned int content_max_lumin[VD_PATH_MAX];
 
+void amvecm_invalidate_output_format(void)
+{
+	output_format = UNKNOWN_FMT;
+}
+EXPORT_SYMBOL(amvecm_invalidate_output_format);
+
 void hdmi_packet_process(
 	int signal_change_flag,
 	struct vinfo_s *vinfo,

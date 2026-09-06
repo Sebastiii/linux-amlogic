@@ -99,3 +99,10 @@
 		};
 	};
 }; /* end of pinctrl_periphs */
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "UGOOS";
+		product_desc = "AM6";
+	};
+};

@@ -14,7 +14,6 @@
  * more details.
  *
  */
-#define DEBUG
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
@@ -33,6 +32,8 @@
 #include <sound/tlv.h>
 
 #include <linux/amlogic/pm.h>
+
+#include "aml_audio_debug.h"
 #include <linux/amlogic/clk_measure.h>
 #include <linux/amlogic/cpu_version.h>
 
@@ -352,23 +353,74 @@ static unsigned int aml_mpll_mclk_ratio(unsigned int freq)
 	return ratio;
 }
 
+static bool aml_tdm_mclk_off_target(struct aml_tdm *p_tdm, unsigned int freq,
+				    unsigned long *got)
+{
+	unsigned long tol;
+
+	if (IS_ERR(p_tdm->mclk))
+		return false;
+
+	*got = clk_get_rate(p_tdm->mclk);
+	tol = freq / 1000;
+
+	return *got > freq + tol || *got + tol < freq;
+}
+
+static void aml_check_tdm_mclk(struct aml_tdm *p_tdm, unsigned int freq)
+{
+	unsigned long got;
+
+	if (aml_tdm_mclk_off_target(p_tdm, freq, &got))
+		pr_warn("tdm%d mclk %lu delivered for %u requested\n",
+			p_tdm->id, got, freq);
+}
+
 static int aml_set_tdm_mclk(struct aml_tdm *p_tdm, unsigned int freq)
 {
 	unsigned int ratio = aml_mpll_mclk_ratio(freq);
 	unsigned int mpll_freq = 0;
+	unsigned long got;
+	bool stale = false;
+	int ret;
 
 	p_tdm->setting.sysclk = freq;
 
-	mpll_freq = freq * ratio;
-	if (mpll_freq != p_tdm->last_mpll_freq) {
-		clk_set_rate(p_tdm->clk, mpll_freq);
-		p_tdm->last_mpll_freq = mpll_freq;
+	if (freq && freq == p_tdm->last_mclk_freq &&
+	    aml_tdm_mclk_off_target(p_tdm, freq, &got)) {
+		pr_warn_ratelimited("tdm%d stale mclk %lu cached as %u, srcpll %lu\n",
+				    p_tdm->id, got, freq,
+				    clk_get_rate(p_tdm->clk));
+		stale = true;
+		if (!clk_set_rate(p_tdm->mclk, freq) &&
+		    !aml_tdm_mclk_off_target(p_tdm, freq, &got))
+			stale = false;
 	}
 
-	if (freq != p_tdm->last_mclk_freq) {
-		clk_set_rate(p_tdm->mclk, freq);
-		p_tdm->last_mclk_freq = freq;
+	mpll_freq = freq * ratio;
+	if (stale || mpll_freq != p_tdm->last_mpll_freq) {
+		ret = clk_set_rate(p_tdm->clk, mpll_freq);
+		if (ret) {
+			pr_warn("tdm%d srcpll %u rejected: %d\n",
+				p_tdm->id, mpll_freq, ret);
+			p_tdm->last_mpll_freq = 0;
+		} else {
+			p_tdm->last_mpll_freq = mpll_freq;
+		}
 	}
+
+	if (stale || freq != p_tdm->last_mclk_freq) {
+		ret = clk_set_rate(p_tdm->mclk, freq);
+		if (ret) {
+			pr_warn("tdm%d mclk %u rejected: %d\n",
+				p_tdm->id, freq, ret);
+			p_tdm->last_mclk_freq = 0;
+		} else {
+			p_tdm->last_mclk_freq = freq;
+		}
+	}
+
+	aml_check_tdm_mclk(p_tdm, freq);
 
 	pr_debug("set mclk:%d, mpll:%d, get mclk:%lu, mpll:%lu\n",
 		freq,
@@ -377,6 +429,37 @@ static int aml_set_tdm_mclk(struct aml_tdm *p_tdm, unsigned int freq)
 		clk_get_rate(p_tdm->clk));
 
 	return 0;
+}
+
+static void aml_probe_tdm_mclk_caps(struct aml_tdm *p_tdm)
+{
+	static const unsigned int rates[] = {
+		44100, 48000, 88200, 96000, 176400, 192000
+	};
+	unsigned long saved_mclk;
+	unsigned long saved_pll;
+	unsigned int i;
+
+	if (IS_ERR(p_tdm->mclk) || IS_ERR(p_tdm->clk))
+		return;
+
+	saved_mclk = clk_get_rate(p_tdm->mclk);
+	saved_pll = clk_get_rate(p_tdm->clk);
+
+	for (i = 0; i < ARRAY_SIZE(rates); i++) {
+		unsigned int want = rates[i] * 256;
+
+		aml_set_tdm_mclk(p_tdm, want);
+		pr_info("tdm%d mclk caps: rate %u want %u got %lu\n",
+			p_tdm->id, rates[i], want,
+			clk_get_rate(p_tdm->mclk));
+	}
+
+	clk_set_rate(p_tdm->clk, saved_pll);
+	clk_set_rate(p_tdm->mclk, saved_mclk);
+
+	p_tdm->last_mclk_freq = 0;
+	p_tdm->last_mpll_freq = 0;
 }
 
 static int aml_tdm_set_fmt(struct aml_tdm *p_tdm,
@@ -874,6 +957,8 @@ static void tdm_sharebuffer_reset(struct aml_tdm *p_tdm, int channels)
 				offset);
 }
 
+static int aml_tdm_chmap_ctl_create(struct snd_pcm_substream *substream);
+
 static int aml_tdm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
@@ -904,6 +989,8 @@ static int aml_tdm_open(struct snd_pcm_substream *substream)
 			dev_err(dev, "failed to claim from ddr\n");
 			goto err_ddr;
 		}
+		if (aml_tdm_chmap_ctl_create(substream) < 0)
+			dev_warn(dev, "failed to add channel map control\n");
 	} else {
 		p_tdm->tddr = aml_audio_register_toddr(dev,
 			p_tdm->actrl, aml_tdm_ddr_isr, substream);
@@ -942,6 +1029,13 @@ static int aml_tdm_close(struct snd_pcm_substream *substream)
 static int aml_tdm_hw_params(struct snd_pcm_substream *substream,
 			 struct snd_pcm_hw_params *hw_params)
 {
+	aml_audio_dbg(AML_AUDIO_DBG_HWPARAMS,
+		"tdm pcm hw_params stream=%d rate=%d ch=%d format=%d bytes=%u",
+		substream->stream,
+		params_rate(hw_params),
+		params_channels(hw_params),
+		params_format(hw_params),
+		params_buffer_bytes(hw_params));
 	return snd_pcm_lib_malloc_pages(substream,
 					params_buffer_bytes(hw_params));
 }
@@ -1119,8 +1213,12 @@ static int aml_dai_tdm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 	unsigned int idx = snd_ctl_get_ioffidx(kcontrol, &ucontrol->id);
 	struct snd_pcm_substream *substream = snd_pcm_chmap_substream(info, idx);
 	struct aml_chmap *prtd = info->private_data;
-	struct snd_pcm_runtime *runtime = substream->runtime;
-	int res = 0, channel, layout, matches, matched_layout;
+	struct snd_pcm_runtime *runtime;
+	int res = 0, channel, layout, matches = 0, matched_layout = 0x00;
+
+	if (!substream || !substream->runtime || !substream->runtime->channels)
+		return -EBADFD;
+	runtime = substream->runtime;
 
 	if (mutex_lock_interruptible(&prtd->chmap_lock)) return -EINTR;
 
@@ -1170,17 +1268,61 @@ static struct snd_kcontrol *aml_dai_tdm_chmap_kctrl_get(struct snd_pcm_substream
 	return NULL;
 }
 
-static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
-			       struct snd_soc_dai *cpu_dai)
+static int aml_tdm_chmap_ctl_create(struct snd_pcm_substream *substream)
 {
-	int ret = 0, i;
-	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct aml_tdm *p_tdm = snd_soc_dai_get_drvdata(cpu_dai);
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_pcm_chmap *chmap;
 	struct snd_kcontrol *kctl;
 	struct snd_pcm_chmap *info;
 	struct aml_chmap *prtd;
+	int ret, i;
+
+	if (substream->stream != SNDRV_PCM_STREAM_PLAYBACK)
+		return 0;
+	if (aml_dai_tdm_chmap_kctrl_get(substream))
+		return 0;
+
+	ret = snd_pcm_add_chmap_ctls(substream->pcm, SNDRV_PCM_STREAM_PLAYBACK, NULL, 8, 0, &chmap);
+	if (ret < 0)
+		return ret;
+
+	kctl = chmap->kctl;
+	for (i = 0; i < kctl->count; i++)
+		kctl->vd[i].access |= SNDRV_CTL_ELEM_ACCESS_WRITE;
+
+	kctl->get = aml_dai_tdm_chmap_ctl_get;
+	kctl->put = aml_dai_tdm_chmap_ctl_put;
+	kctl->tlv.c = aml_dai_tdm_chmap_ctl_tlv;
+
+	info = snd_kcontrol_chip(kctl);
+	prtd = info->private_data;
+	if (prtd == NULL) {
+		prtd = kzalloc(sizeof(struct aml_chmap), GFP_KERNEL);
+		if (!prtd)
+			return -ENOMEM;
+		mutex_init(&prtd->chmap_lock);
+		info->private_data = prtd;
+	}
+
+	return 0;
+}
+
+static unsigned int aml_tdm_validated_layout(struct snd_pcm_runtime *runtime)
+{
+	unsigned int layout = (unsigned int)runtime->layout;
+
+	if (layout < ARRAY_SIZE(channel_allocations) &&
+	    channel_allocations[layout].channels == runtime->channels)
+		return layout;
+	return 0;
+}
+
+static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
+			       struct snd_soc_dai *cpu_dai)
+{
+	int ret = 0;
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	struct aml_tdm *p_tdm = snd_soc_dai_get_drvdata(cpu_dai);
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	int bit_depth, separated = 0;
 	struct aud_para aud_param;
 
@@ -1189,7 +1331,7 @@ static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
 	aud_param.rate = runtime->rate;
 	aud_param.size = runtime->sample_bits;
 	aud_param.chs  = runtime->channels;
-	aud_param.layout = runtime->layout;
+	aud_param.layout = aml_tdm_validated_layout(runtime);
 
 	bit_depth = snd_pcm_format_width(runtime->format);
 
@@ -1256,31 +1398,9 @@ static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
 		aml_frddr_select_dst(fr, dst);
 
 		// Alsa Channel Mapping API handling
-		if (!aml_dai_tdm_chmap_kctrl_get(substream))
-		{
-			ret = snd_pcm_add_chmap_ctls(substream->pcm, SNDRV_PCM_STREAM_PLAYBACK, NULL, 8, 0, &chmap);
-			if (ret < 0)
-			{
-				pr_err("aml_dai_tdm_startup error %d\n", ret);
-				return ret;
-			}
-
-			kctl = chmap->kctl;
-			for (i = 0; i < kctl->count; i++)
-				kctl->vd[i].access |= SNDRV_CTL_ELEM_ACCESS_WRITE;
-
-			kctl->get = aml_dai_tdm_chmap_ctl_get;
-			kctl->put = aml_dai_tdm_chmap_ctl_put;
-			kctl->tlv.c = aml_dai_tdm_chmap_ctl_tlv;
-
-			info = snd_kcontrol_chip(kctl);
-			prtd = info->private_data;
-			if (prtd == NULL) {
-				prtd = (struct aml_chmap*)kzalloc(sizeof(struct aml_chmap), GFP_KERNEL);
-				info->private_data = prtd;
-			}
-			mutex_init(&prtd->chmap_lock);
-		}
+		ret = aml_tdm_chmap_ctl_create(substream);
+		if (ret < 0)
+			pr_err("%s: add chmap ctl error %d\n", __func__, ret);
 		return ret;
 
 	} else {
@@ -1309,7 +1429,7 @@ static int aml_dai_tdm_prepare(struct snd_pcm_substream *substream,
 			return -EINVAL;
 		}
 
-		dev_info(substream->pcm->card->dev, "tdm prepare capture\n");
+		dev_dbg(substream->pcm->card->dev, "tdm prepare capture\n");
 		aml_tdmin_set_src(p_tdm);
 
 		fmt.type      = toddr_type;
@@ -1331,6 +1451,14 @@ static int aml_dai_tdm_trigger(struct snd_pcm_substream *substream, int cmd,
 {
 	struct aml_tdm *p_tdm = snd_soc_dai_get_drvdata(cpu_dai);
 	struct snd_pcm_runtime *runtime = substream->runtime;
+
+	aml_audio_dbg(AML_AUDIO_DBG_TRIGGER,
+		"tdm trigger id=%d stream=%d cmd=%d rate=%u ch=%u",
+		p_tdm->id,
+		substream->stream,
+		cmd,
+		runtime->rate,
+		runtime->channels);
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
@@ -1362,7 +1490,7 @@ static int aml_dai_tdm_trigger(struct snd_pcm_substream *substream, int cmd,
 			 * 4. SPDIFOUT enable
 			 * 5. FRDDR enable
 			 */
-			dev_info(substream->pcm->card->dev,
+			dev_dbg(substream->pcm->card->dev,
 				 "TDM[%d] Playback enable\n",
 				 p_tdm->id);
 
@@ -1387,7 +1515,7 @@ static int aml_dai_tdm_trigger(struct snd_pcm_substream *substream, int cmd,
 
 			locker_reset(aml_get_card_locker(card));
 		} else {
-			dev_info(substream->pcm->card->dev,
+			dev_dbg(substream->pcm->card->dev,
 				 "TDM[%d] Capture enable\n",
 				 p_tdm->id);
 			aml_toddr_enable(p_tdm->tddr, 1);
@@ -1414,7 +1542,7 @@ static int aml_dai_tdm_trigger(struct snd_pcm_substream *substream, int cmd,
 			 * 3. TDMOUT/SPDIF Disable
 			 * 4. FRDDR Disable
 			 */
-			dev_info(substream->pcm->card->dev,
+			dev_dbg(substream->pcm->card->dev,
 				 "TDM[%d] Playback stop\n",
 				 p_tdm->id);
 			/*don't change this flow*/
@@ -1443,7 +1571,7 @@ static int aml_dai_tdm_trigger(struct snd_pcm_substream *substream, int cmd,
 
 			aml_tdm_enable(p_tdm->actrl,
 				substream->stream, p_tdm->id, false);
-			dev_info(substream->pcm->card->dev,
+			dev_dbg(substream->pcm->card->dev,
 				 "TDM[%d] Capture stop\n",
 				 p_tdm->id);
 
@@ -1496,6 +1624,15 @@ static int aml_dai_tdm_hw_params(struct snd_pcm_substream *substream,
 	unsigned int channels = params_channels(params);
 	struct snd_soc_card *card = cpu_dai->component->card;
 	struct soft_locker *locker = aml_get_card_locker(card);
+
+	aml_audio_dbg(AML_AUDIO_DBG_HWPARAMS | AML_AUDIO_DBG_RATE,
+		"tdm dai hw_params id=%d stream=%d rate=%u ch=%u format=%d bufFrames=%u",
+		p_tdm->id,
+		substream->stream,
+		rate,
+		channels,
+		params_format(params),
+		params_buffer_size(params));
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		struct frddr *fr = p_tdm->fddr;
@@ -2163,6 +2300,8 @@ static int aml_tdm_platform_probe(struct platform_device *pdev)
 		ret = clk_set_parent(p_tdm->mclk, p_tdm->clk);
 		if (ret)
 			dev_warn(dev, "can't set tdm parent clock\n");
+		else
+			aml_probe_tdm_mclk_caps(p_tdm);
 	}
 
 	/* clk tree style after SM1, instead of legacy prop */

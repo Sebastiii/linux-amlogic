@@ -2302,7 +2302,7 @@ enum hdr_process_sel hdr_func(
 		/*for g12a/g12b osd blend shift rtl bug*/
 		if (is_meson_g12a_cpu() ||
 		    (is_meson_g12b_cpu() && is_meson_rev_a()))
-			always_full_func = false;
+			always_full_func = true;
 	}
 
 	if (cpu_after_eq(MESON_CPU_MAJOR_ID_TM2)) {

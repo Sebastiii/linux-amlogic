@@ -104,6 +104,7 @@
 #define VFRAME_FLAG_DI_PW_N_LOCAL		0x200000
 #define VFRAME_FLAG_DI_PW_N_EXT			0x400000
 #define VFRAME_FLAG_HF				0x800000 /*HF*/
+#define VFRAME_FLAG_DROP_FRAME		0x80000000
 
 /* need check folllowing bits when toggle frame, to trigger property change */
 /* add more bits which indicates display attr change in vf->flag */
@@ -561,6 +562,7 @@ struct vframe_s {
 	u32 zorder;
 	u32 repeat_count[2];
 	struct file *file_vf;
+	atomic_t use_cnt;
 	bool rendered;
 
 	struct codec_mm_box_s mm_box;

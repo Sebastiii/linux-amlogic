@@ -235,3 +235,10 @@
 	pinctrl-0 = <&i2c3_master_pins2>;
 	clock-frequency = <100000>;
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "HK";
+		product_desc = "ODROID-C4";
+	};
+};

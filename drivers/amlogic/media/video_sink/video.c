@@ -1877,6 +1877,24 @@ static void display_latency_debug(struct vframe_s *vf)
 		vf->omx_index, vf->pts_us64, time_info[index].display_time);
 }
 
+#define VFM_CHAIN_WALK_MAX 64
+
+static char *vf_walk_to_chain_head(char *provider_name)
+{
+	int cnt = VFM_CHAIN_WALK_MAX;
+
+	while (provider_name && cnt-- > 0) {
+		char *next = vf_get_provider_name(provider_name);
+
+		if (!next)
+			break;
+		provider_name = next;
+	}
+	WARN_ONCE(cnt < 0, "vfm: provider chain walk hit cap %d (cyclic map?)\n",
+		  VFM_CHAIN_WALK_MAX);
+	return provider_name;
+}
+
 static void update_process_hdmi_avsync_flag(bool flag)
 {
 	char *provider_name = vf_get_provider_name(RECEIVER_NAME);
@@ -1886,12 +1904,7 @@ static void update_process_hdmi_avsync_flag(bool flag)
 	if (last_required_total_delay <= 0)
 		return;
 
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (provider_name && (!strcmp(provider_name, "dv_vdin") ||
 		!strcmp(provider_name, "vdin0"))) {
 		spin_lock_irqsave(&hdmi_avsync_lock, flags);
@@ -1926,12 +1939,7 @@ static void process_hdmi_video_sync(struct vframe_s *vf)
 		return;
 
 	hdmin_delay_duration = 0;
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (provider_name && (!strcmp(provider_name, "dv_vdin") ||
 		!strcmp(provider_name, "vdin0"))) {
 		if (vf->duration > 0) {
@@ -2887,12 +2895,7 @@ static void vsync_notify(void)
 	if (video_notify_flag & VIDEO_NOTIFY_NEED_NO_COMP) {
 		char *provider_name = vf_get_provider_name(RECEIVER_NAME);
 
-		while (provider_name) {
-			if (!vf_get_provider_name(provider_name))
-				break;
-			provider_name =
-				vf_get_provider_name(provider_name);
-		}
+		provider_name = vf_walk_to_chain_head(provider_name);
 		if (provider_name)
 			vf_notify_provider_by_name(provider_name,
 			VFRAME_EVENT_RECEIVER_NEED_NO_COMP,
@@ -2956,12 +2959,7 @@ static inline bool video_vf_disp_mode_check(struct vframe_s *vf)
 	req.disp_mode = 0;
 	req.req_mode = 1;
 
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (provider_name)
 		ret = vf_notify_provider_by_name(provider_name,
 			VFRAME_EVENT_RECEIVER_DISP_MODE, (void *)&req);
@@ -3009,12 +3007,7 @@ static enum vframe_disp_mode_e video_vf_disp_mode_get(struct vframe_s *vf)
 	req.disp_mode = 0;
 	req.req_mode = 0;
 
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (provider_name)
 		vf_notify_provider_by_name(provider_name,
 			VFRAME_EVENT_RECEIVER_DISP_MODE, (void *)&req);
@@ -3026,12 +3019,7 @@ static int video_vdin_buf_info_get(void)
 	char *provider_name = vf_get_provider_name(RECEIVER_NAME);
 	int max_buf_cnt = -1;
 
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (provider_name && (!strcmp(provider_name, "dv_vdin") ||
 		!strcmp(provider_name, "vdin0")))
 		vf_notify_provider_by_name(provider_name,
@@ -3160,12 +3148,7 @@ static inline bool dv_vf_crc_check(struct vframe_s *vf)
 	bool crc_err = false;
 	char *provider_name = vf_get_provider_name(RECEIVER_NAME);
 
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (provider_name && (!strcmp(provider_name, "dv_vdin") ||
 			      !strcmp(provider_name, "vdin0"))) {
 		if (!vf->dv_crc_sts) {
@@ -3305,19 +3288,13 @@ static void dolby_vision_proc(
 
 		if (cur_frame_par) {
 			if (layer->new_vpp_setting) {
-				struct vppfilter_mode_s *vpp_filter =
-					&cur_frame_par->vpp_filter;
-				if ((vpp_filter->vpp_hsc_start_phase_step
-					== 0x1000000) &&
-					(vpp_filter->vpp_vsc_start_phase_step
-					== 0x1000000) &&
-					(vpp_filter->vpp_hsc_start_phase_step ==
-					vpp_filter->vpp_hf_start_phase_step) &&
-					!vpp_filter->vpp_pre_vsc_en &&
-					!vpp_filter->vpp_pre_hsc_en &&
-					!cur_frame_par->supsc0_enable &&
-					!cur_frame_par->supsc1_enable &&
-					layer->bypass_pps)
+				if (((video_layer_is_native_pps_config(
+					      layer, cur_frame_par) &&
+				      !cur_frame_par->supsc0_enable &&
+				      !cur_frame_par->supsc1_enable &&
+				      layer->bypass_pps)) ||
+				    video_layer_should_auto_bypass_pps(
+					    layer, cur_frame_par))
 					pps_state = 2; /* pps disable */
 				else
 					pps_state = 1; /* pps enable */
@@ -3516,12 +3493,7 @@ static int hdmi_in_delay_check(struct vframe_s *vf)
 	if (!vf || vf->duration == 0)
 		return 0;
 
-	while (provider_name) {
-		if (!vf_get_provider_name(provider_name))
-			break;
-		provider_name =
-			vf_get_provider_name(provider_name);
-	}
+	provider_name = vf_walk_to_chain_head(provider_name);
 	if (!provider_name || (strcmp(provider_name, "dv_vdin") &&
 		strcmp(provider_name, "vdin0"))) {
 		return 0;
@@ -4791,24 +4763,14 @@ static irqreturn_t vsync_isr_in(int irq, void *dev_id)
 
 		if (vd1_path_id == VFM_PATH_PIP) {
 			provider_name = vf_get_provider_name(RECEIVERPIP_NAME);
-			while (provider_name) {
-				if (!vf_get_provider_name(provider_name))
-					break;
-				provider_name =
-					vf_get_provider_name(provider_name);
-			}
+			provider_name = vf_walk_to_chain_head(provider_name);
 			if (provider_name)
 				dolby_vision_set_provider(provider_name);
 			else
 				dolby_vision_set_provider(dv_provider);
 		} else {
 			provider_name = vf_get_provider_name(RECEIVER_NAME);
-			while (provider_name) {
-				if (!vf_get_provider_name(provider_name))
-					break;
-				provider_name =
-					vf_get_provider_name(provider_name);
-			}
+			provider_name = vf_walk_to_chain_head(provider_name);
 			if (provider_name)
 				dolby_vision_set_provider(provider_name);
 			else
@@ -4885,6 +4847,25 @@ static irqreturn_t vsync_isr_in(int irq, void *dev_id)
 	}
 
 	vf = video_vf_peek();
+
+	while (vf && (vf->flag & VFRAME_FLAG_DROP_FRAME)) {
+#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
+		if (is_dolby_vision_enable() && is_dovi_frame(vf)) {
+			if (dolby_vision_drop_frame() == 1)
+				break;
+		} else
+#endif
+		{
+			vf = video_vf_get();
+			if (video_vf_put(vf) < 0)
+				check_dispbuf(vf, true);
+		}
+		video_drop_vf_cnt++;
+		if (debug_flag & DEBUG_FLAG_PRINT_DROP_FRAME)
+			pr_info("#line %d: drop frame: drop count %d\n",
+				__LINE__, video_drop_vf_cnt);
+		vf = video_vf_peek();
+	}
 
 	if (vf) {
 		if (glayer_info[0].display_path_id == VFM_PATH_AUTO) {
@@ -6114,7 +6095,7 @@ SET_FILTER:
 			if (cur_dispbuf == &vf_local)
 				vd_layer[0].dispbuf = cur_dispbuf;
 
-		if (gvideo_recv[0]->cur_buf &&
+		if (gvideo_recv[0] && gvideo_recv[0]->cur_buf &&
 			gvideo_recv[0]->cur_buf->flag & VFRAME_FLAG_FAKE_FRAME)
 			vd_layer[0].dispbuf = gvideo_recv[0]->cur_buf;
 
@@ -6212,33 +6193,41 @@ SET_FILTER:
 		vd_layer[0].keep_frame_id = 0xff;
 
 #if defined(CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_VECM)
-	if (new_frame)
-		refresh_on_vs(new_frame, vd_layer[0].dispbuf);
+	{
+		int amvecm_flags = new_frame ? CSC_FLAG_TOGGLE_FRAME : 0;
 
-	amvecm_on_vs(
-		!is_local_vf(vd_layer[0].dispbuf)
-		? vd_layer[0].dispbuf : NULL,
-		new_frame,
-		new_frame ? CSC_FLAG_TOGGLE_FRAME : 0,
-		cur_frame_par ?
-		cur_frame_par->supsc1_hori_ratio :
-		0,
-		cur_frame_par ?
-		cur_frame_par->supsc1_vert_ratio :
-		0,
-		cur_frame_par ?
-		cur_frame_par->spsc1_w_in :
-		0,
-		cur_frame_par ?
-		cur_frame_par->spsc1_h_in :
-		0,
-		cur_frame_par ?
-		cur_frame_par->cm_input_w :
-		0,
-		cur_frame_par ?
-		cur_frame_par->cm_input_h :
-		0,
-		VD1_PATH);
+		if (video_layer_should_auto_bypass_cm(
+			    &vd_layer[0], cur_frame_par))
+			amvecm_flags |= CSC_FLAG_BYPASS_PQ;
+
+		if (new_frame)
+			refresh_on_vs(new_frame, vd_layer[0].dispbuf);
+
+		amvecm_on_vs(
+			!is_local_vf(vd_layer[0].dispbuf)
+			? vd_layer[0].dispbuf : NULL,
+			new_frame,
+			amvecm_flags,
+			cur_frame_par ?
+			cur_frame_par->supsc1_hori_ratio :
+			0,
+			cur_frame_par ?
+			cur_frame_par->supsc1_vert_ratio :
+			0,
+			cur_frame_par ?
+			cur_frame_par->spsc1_w_in :
+			0,
+			cur_frame_par ?
+			cur_frame_par->spsc1_h_in :
+			0,
+			cur_frame_par ?
+			cur_frame_par->cm_input_w :
+			0,
+			cur_frame_par ?
+			cur_frame_par->cm_input_h :
+			0,
+			VD1_PATH);
+	}
 #endif
 
 	/* work around which dec/vdin don't call update src_fmt function */
@@ -6842,6 +6831,8 @@ static void video_vf_unreg_provider(void)
 	struct vframe_s *el_vf = NULL;
 	int keeped = 0, ret = 0;
 #ifdef CONFIG_AMLOGIC_MEDIA_VSYNC_RDMA
+	struct vframe_s *inflight[DISPBUF_TO_PUT_MAX + 1];
+	int inflight_n = 0;
 	int i;
 #endif
 
@@ -6871,8 +6862,14 @@ static void video_vf_unreg_provider(void)
 	}
 #ifdef CONFIG_AMLOGIC_MEDIA_VSYNC_RDMA
 	dispbuf_to_put_num = 0;
-	for (i = 0; i < DISPBUF_TO_PUT_MAX; i++)
+	for (i = 0; i < DISPBUF_TO_PUT_MAX; i++) {
+		if (dispbuf_to_put[i] &&
+		    dispbuf_to_put[i] != cur_dispbuf)
+			inflight[inflight_n++] = dispbuf_to_put[i];
 		dispbuf_to_put[i] = NULL;
+	}
+	if (cur_rdma_buf && cur_rdma_buf != cur_dispbuf)
+		inflight[inflight_n++] = cur_rdma_buf;
 	cur_rdma_buf = NULL;
 #endif
 	if (cur_dispbuf) {
@@ -6967,6 +6964,11 @@ static void video_vf_unreg_provider(void)
 	if (cur_dispbuf)
 		keeped = vf_keep_current(
 			cur_dispbuf, el_vf);
+#ifdef CONFIG_AMLOGIC_MEDIA_VSYNC_RDMA
+	if (keeped > 0)
+		for (i = 0; i < inflight_n; i++)
+			vf_keep_extra(inflight[i]);
+#endif
 	if (had_cur_dispbuf2) {
 		if (keeped > 0)
 			need_disable_vd2 = false;
@@ -6974,7 +6976,7 @@ static void video_vf_unreg_provider(void)
 			need_disable_vd2 = true;
 	}
 
-	pr_info("video_vf_unreg_provider: vd1 used: %s, vd2 used: %s, keep_ret:%d, black_out:%d, cur_dispbuf:%p\n",
+	pr_debug("video_vf_unreg_provider: vd1 used: %s, vd2 used: %s, keep_ret:%d, black_out:%d, cur_dispbuf:%p\n",
 		layer1_used ? "true" : "false",
 		layer2_used ? "true" : "false",
 		keeped, blackout | force_blackout,
@@ -6989,7 +6991,7 @@ static void video_vf_unreg_provider(void)
 		if (keeped < 0)
 			pr_info("keep frame failed, disable video now.\n");
 		else
-			pr_info("keep frame skip, disable video again.\n");
+			pr_debug("keep frame skip, disable video again.\n");
 		if (layer1_used)
 			safe_switch_videolayer(
 				0, false, false);
@@ -7000,7 +7002,7 @@ static void video_vf_unreg_provider(void)
 	}
 
 	atomic_dec(&video_unreg_flag);
-	pr_info("VD1 AFBC 0x%x.\n", READ_VCBUS_REG(AFBC_ENABLE));
+	pr_debug("VD1 AFBC 0x%x.\n", READ_VCBUS_REG(AFBC_ENABLE));
 	enable_video_discontinue_report = 1;
 	show_first_picture = false;
 	show_first_frame_nosync = false;
@@ -7398,7 +7400,7 @@ static void pip_vf_unreg_provider(void)
 		if (keeped < 0)
 			pr_info("keep frame failed, disable videopip now.\n");
 		else
-			pr_info("keep frame skip, disable videopip again.\n");
+			pr_debug("keep frame skip, disable videopip again.\n");
 		if (layer1_used)
 			safe_switch_videolayer(
 				0, false, false);
@@ -7890,7 +7892,7 @@ int _video_set_disable(u32 val)
 		layer->disable_video = VIDEO_DISABLE_NONE;
 
 	if (layer->disable_video != VIDEO_DISABLE_NONE) {
-		pr_info("VID: VD1 off\n");
+		pr_debug("VID: VD1 off\n");
 		safe_switch_videolayer(
 			layer->layer_id, false, true);
 
@@ -10883,6 +10885,12 @@ static ssize_t vframe_ready_cnt_show(struct class *cla,
 		states.buf_avail_num : 0);
 }
 
+static ssize_t underflow_count_show(struct class *cla,
+				struct class_attribute *attr, char *buf)
+{
+	return snprintf(buf, 12, "%u\n", underflow);
+}
+
 static ssize_t fps_info_show(struct class *cla, struct class_attribute *attr,
 			     char *buf)
 {
@@ -12793,6 +12801,7 @@ static struct class_attribute amvideo_class_attrs[] = {
 	__ATTR_RO(video_state),
 	__ATTR_RO(fps_info),
 	__ATTR_RO(vframe_ready_cnt),
+	__ATTR_RO(underflow_count),
 	__ATTR_RO(video_layer1_state),
 	__ATTR_RO(pic_mode_info),
 	__ATTR_RO(src_fmt),
@@ -13050,6 +13059,8 @@ int vout_notify_callback(struct notifier_block *block, unsigned long cmd,
 	switch (cmd) {
 	case VOUT_EVENT_MODE_CHANGE:
 		info = get_current_vinfo();
+		if (!info)
+			break;
 		spin_lock_irqsave(&lock, flags);
 		vinfo = info;
 		/* pre-calculate vsync_pts_inc in 90k unit */

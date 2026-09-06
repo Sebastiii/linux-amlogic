@@ -78,6 +78,18 @@ static int keep_pip_el_id;
 static int keep_pip_el_head_id;
 static int keep_pip_el_dw_id;
 
+static uint keep_extra_enable = 1;
+MODULE_PARM_DESC(keep_extra_enable, "\n keep_extra_enable\n");
+module_param(keep_extra_enable, uint, 0664);
+
+static u32 keep_extra_cnt;
+MODULE_PARM_DESC(keep_extra_cnt, "\n keep_extra_cnt\n");
+module_param(keep_extra_cnt, uint, 0664);
+
+#define KEEP_EXTRA_MAX 4
+static int keep_extra_ids[KEEP_EXTRA_MAX * 3];
+static int keep_extra_used;
+
 #define Y_BUFFER_SIZE   0x600000	/* for 1920*1088 */
 #define U_BUFFER_SIZE   0x100000	/* compatible with NV21 */
 #define V_BUFFER_SIZE   0x80000
@@ -820,7 +832,7 @@ void try_free_keep_video(int flags)
 		keep_video_on = 0;
 		if (layer1_used) {
 			if (!get_video_enabled()) {
-				pr_info("disabled amvideo on vd1 for next before free keep buffer!\n");
+				pr_debug("disabled amvideo on vd1 for next before free keep buffer!\n");
 				_video_set_disable(flags ?
 					VIDEO_DISABLE_NORMAL :
 					VIDEO_DISABLE_FORNEXT);
@@ -830,7 +842,7 @@ void try_free_keep_video(int flags)
 		}
 		if (layer2_used) {
 			if (!get_videopip_enabled()) {
-				pr_info("disabled amvideo on vd2 for next before free keep buffer!\n");
+				pr_debug("disabled amvideo on vd2 for next before free keep buffer!\n");
 				_videopip_set_disable(flags ?
 					VIDEO_DISABLE_NORMAL :
 					VIDEO_DISABLE_FORNEXT);
@@ -1000,8 +1012,16 @@ static int video_pip_keeper_frame_keep_locked(
  */
 void video_keeper_new_frame_notify(void)
 {
+	int i;
+
+	for (i = 0; i < keep_extra_used; i++) {
+		if (keep_extra_ids[i] > 0)
+			codec_mm_keeper_unmask_keeper(keep_extra_ids[i], 120);
+		keep_extra_ids[i] = 0;
+	}
+	keep_extra_used = 0;
 	if (keep_video_on) {
-		pr_info("new frame show, free keeper\n");
+		pr_debug("new frame show, free keeper\n");
 		keep_video_on = 0;
 	}
 	if (keep_id > 0) {
@@ -1103,7 +1123,7 @@ static unsigned int vf_ge2d_keep_frame_locked(struct vframe_s *ge2d_buf)
 
 	if (ge2d_buf->type & VIDTYPE_COMPRESS) {
 		/* todo: duplicate compressed video frame */
-		pr_info("keep exit is skip VIDTYPE_COMPRESS\n");
+		pr_debug("keep exit is skip VIDTYPE_COMPRESS\n");
 		return 0;
 	}
 
@@ -1201,12 +1221,12 @@ static unsigned int vf_keep_current_locked(
 
 	if (get_video_debug_flags() &
 		DEBUG_FLAG_TOGGLE_SKIP_KEEP_CURRENT) {
-		pr_info("keep exit is skip current\n");
+		pr_debug("keep exit is skip current\n");
 		return 0;
 	}
 
 	if (get_blackout_policy()) {
-		pr_info("keep exit is skip current\n");
+		pr_debug("keep exit is skip current\n");
 		return 0;
 	}
 
@@ -1238,7 +1258,7 @@ static unsigned int vf_keep_current_locked(
 		ret = 0;
 #endif
 	} else {
-		pr_info("use keep buffer keep frame!\n");
+		pr_debug("use keep buffer keep frame!\n");
 		ret = video_keeper_frame_keep_locked(
 			cur_buf,
 			cur_buf_el);
@@ -1246,7 +1266,7 @@ static unsigned int vf_keep_current_locked(
 
 	if (ret) {
 		keep_video_on = 1;
-		pr_info("%s: keep video successful!\n", __func__);
+		pr_debug("%s: keep video successful!\n", __func__);
 	} else {
 		keep_video_on = 0;
 		pr_info("%s: keep video failed!\n", __func__);
@@ -1272,7 +1292,7 @@ unsigned int vf_keep_pip_current_locked(
 	}
 
 	if (get_blackout_pip_policy()) {
-		pr_info("policy: keep exit is skip current\n");
+		pr_debug("policy: keep exit is skip current\n");
 		return 0;
 	}
 
@@ -1317,6 +1337,39 @@ unsigned int vf_keep_current(
 	mutex_unlock(&video_keeper_mutex);
 	return ret;
 }
+
+static void keep_extra_one(void *mem_handle, int type)
+{
+	int id;
+
+	if (!mem_handle || keep_extra_used >= KEEP_EXTRA_MAX * 3)
+		return;
+	id = codec_mm_keeper_mask_keep_mem(mem_handle, type);
+	if (id > 0)
+		keep_extra_ids[keep_extra_used++] = id;
+}
+
+void vf_keep_extra(struct vframe_s *vf)
+{
+	int type = MEM_TYPE_CODEC_MM;
+
+	if (!keep_extra_enable || !vf)
+		return;
+	if (!vf->mem_handle && !vf->mem_head_handle)
+		return;
+	mutex_lock(&video_keeper_mutex);
+	if (vf->type & VIDTYPE_SCATTER)
+		type = MEM_TYPE_CODEC_MM_SCATTER;
+	keep_extra_one(vf->mem_handle, type);
+	keep_extra_one(vf->mem_head_handle, MEM_TYPE_CODEC_MM);
+	keep_extra_one(vf->mem_dw_handle, MEM_TYPE_CODEC_MM);
+	keep_extra_cnt++;
+	if (get_video_debug_flags() & DEBUG_FLAG_BASIC_INFO)
+		pr_info("keep extra: masked inflight vf %p, ids used %d, cnt %u\n",
+			vf, keep_extra_used, keep_extra_cnt);
+	mutex_unlock(&video_keeper_mutex);
+}
+EXPORT_SYMBOL(vf_keep_extra);
 
 int video_keeper_init(void)
 {

@@ -806,7 +806,7 @@ static int parse_sei(char *sei_buf, uint32_t size)
 	char *p_sei;
 	uint16_t header;
 	uint8_t nal_unit_type;
-	uint8_t payload_type, payload_size;
+	uint32_t payload_type, payload_size;
 	int ret = 0;
 
 	if (size < 2)
@@ -819,11 +819,25 @@ static int parse_sei(char *sei_buf, uint32_t size)
 	&& (nal_unit_type != NAL_UNIT_SEI_SUFFIX))
 		return 0;
 	while (p+2 <= sei_buf+size) {
-		payload_type = *p++;
-		payload_size = *p++;
+		payload_type = 0;
+		while ((uint8_t)*p == 0xff && p + 1 < sei_buf + size) {
+			payload_type += 0xff;
+			p++;
+		}
+		payload_type += (uint8_t)*p++;
+		if (p >= sei_buf + size)
+			break;
+		payload_size = 0;
+		while ((uint8_t)*p == 0xff && p + 1 < sei_buf + size) {
+			payload_size += 0xff;
+			p++;
+		}
+		payload_size += (uint8_t)*p++;
 		if (p + payload_size <= sei_buf + size) {
 			switch (payload_type) {
 			case SEI_Syntax:
+				if (payload_size < 6)
+					break;
 				p_sei = p;
 				if (p_sei[0] == 0xB5 &&
 					p_sei[1] == 0x00 &&
@@ -1046,6 +1060,11 @@ if (vf) {
 				(void *)&req);
 			if (!req.aux_buf)
 				vf_notify_provider_by_name(
+				"vdec.vp9.00",
+				VFRAME_EVENT_RECEIVER_GET_AUX_DATA,
+				(void *)&req);
+			if (!req.aux_buf)
+				vf_notify_provider_by_name(
 				"decoder",
 				VFRAME_EVENT_RECEIVER_GET_AUX_DATA,
 				(void *)&req);
@@ -1107,8 +1126,6 @@ if (vf) {
 						p[5] == 0x04) {
 							parser_hdr10_plus_medata(p, size);
 							vf->src_fmt.fmt = VFRAME_SIGNAL_FMT_HDR10PLUS;
-							vf->type &= 0xffff00ff;
-							vf->type |= 0x00003000;
 					}
 				}
 

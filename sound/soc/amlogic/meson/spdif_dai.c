@@ -287,7 +287,7 @@ void aml_hw_iec958_init(struct snd_pcm_substream *substream, int samesrc)
 	}
 
 	if (IEC958_mode_codec == 7 || IEC958_mode_codec == 8) {
-		pr_info("set 4x audio clk for 958\n");
+		pr_debug("set 4x audio clk for 958\n");
 		div = 1;
 	} else if (samesrc) {
 		pr_debug("share the same clock\n");

@@ -74,7 +74,6 @@ do {					\
 		pr_info(fmt, ## arg);	\
 } while (0)
 
-#define DEBUG
 #ifdef DEBUG
 #define  AMLOG   1
 #define LOG_LEVEL_VAR amlog_level_picdec

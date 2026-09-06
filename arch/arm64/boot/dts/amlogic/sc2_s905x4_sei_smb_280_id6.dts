@@ -18,3 +18,9 @@
 		};
 	};
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "Dune";
+	};
+};

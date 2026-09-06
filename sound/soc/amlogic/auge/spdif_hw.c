@@ -14,7 +14,6 @@
  * more details.
  *
  */
-#define DEBUG
 #include <sound/soc.h>
 
 #include "iomap.h"

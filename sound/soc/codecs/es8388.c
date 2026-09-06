@@ -34,7 +34,7 @@
 #include "es8388.h"
 
 #if 1
-#define DBG(x...) printk(x)
+#define DBG(x...) pr_debug(x)
 #else
 #define DBG(x...) do { } while (0)
 #endif
@@ -140,7 +140,7 @@ static irqreturn_t hp_det_irq_handler(int irq, void *dev_id)
 	struct es8388_priv *es8388 = es8388_private;
 
 	DBG("%s-- Enter!\n",__FUNCTION__);
-	printk("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	disable_irq_nosync(irq);
 
@@ -185,7 +185,7 @@ static irqreturn_t aux_det_irq_handler(int irq, void *dev_id)
 	struct es8388_priv *es8388 = es8388_private;
 
 	DBG("%s-- Enter!\n",__FUNCTION__);
-	printk("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	disable_irq_nosync(irq);
 
@@ -262,7 +262,7 @@ static int es8388_write(struct snd_soc_codec *codec, unsigned int reg,
 	int ret;
 
 //	DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
-	printk("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 //	BUG_ON(codec->volatile_register);
 	data[0] = reg & 0xff;
 	data[1] = value & 0x00ff;
@@ -336,7 +336,7 @@ static void delay_work_func(struct work_struct *work)
  static int es8388_reset(struct snd_soc_codec *codec)
  {
  	int ret = -1;
-	printk("%s\n", __func__);
+	pr_debug("%s\n", __func__);
  	ret = snd_soc_write(codec, ES8388_CONTROL1, 0x80);
  	if(ret)
  		DBG("%s-- snd_soc_write failed!\n",__FUNCTION__);
@@ -670,7 +670,7 @@ static int es8388_set_dai_sysclk(struct snd_soc_dai *codec_dai,
 	struct es8388_priv *es8388 = snd_soc_codec_get_drvdata(codec);
 
     DBG("Enter::%s----%d\n",__FUNCTION__,__LINE__);
-	printk("es8388_set_dai_sysclk freq = %d!\n",freq);
+	pr_debug("es8388_set_dai_sysclk freq = %d!\n",freq);
 
 	switch (freq) {
 	case 11289600:
@@ -708,7 +708,7 @@ static int es8388_set_dai_fmt(struct snd_soc_dai *codec_dai,
     u8 daciface = 0;
     alsa_dbg("%s----%d, fmt[%02x]\n",__FUNCTION__,__LINE__,fmt);
 
-	printk("es8388_set_dai_fmt fmt = %d! \n",fmt);
+	pr_debug("es8388_set_dai_fmt fmt = %d! \n",fmt);
 
     iface    = snd_soc_read(codec, ES8388_IFACE);
     adciface = snd_soc_read(codec, ES8388_ADC_IFACE);
@@ -793,7 +793,7 @@ static int es8388_pcm_startup(struct snd_pcm_substream *substream,
 	//struct es8388_priv *es8388 = snd_soc_codec_get_drvdata(codec);
 
 	bool playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
-	printk("es8388_pcm_startup !\n");
+	pr_debug("es8388_pcm_startup !\n");
 	if(playback) {
   /*set Audio PA ON*/
 	}
@@ -807,7 +807,7 @@ static void es8388_pcm_shutdown(struct snd_pcm_substream *substream,
 	//struct snd_soc_codec *codec = dai->codec;
 	//struct es8388_priv *es8388 = snd_soc_codec_get_drvdata(codec);
 	bool playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
-	printk("es8388_pcm_shutdown !\n");
+	pr_debug("es8388_pcm_shutdown !\n");
 	if(playback) {
   /*set Audio PA OFF*/
 	}
@@ -832,18 +832,18 @@ static int es8388_pcm_hw_params(struct snd_pcm_substream *substream,
 	int coeff,temp;
 //	int ret2,i;
 
-	printk("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	srate = snd_soc_read(codec, ES8388_IFACE) & 0x80;
 	adciface = snd_soc_read(codec, ES8388_ADC_IFACE) & 0xE3;
 	daciface = snd_soc_read(codec, ES8388_DAC_IFACE) & 0xC7;
 
 	temp = params_rate(params);
-	printk("%s params_rate(params) = %d ! es8388->sysclk = %d !\n", __func__,temp,es8388->sysclk);
+	pr_debug("%s params_rate(params) = %d ! es8388->sysclk = %d !\n", __func__,temp,es8388->sysclk);
 
 //	es8388->sysclk = 12288000;
 	coeff = get_coeff(es8388->sysclk, params_rate(params));
-	printk("coeff = %d es8388->sysclk = %d \n",coeff,es8388->sysclk);
+	pr_debug("coeff = %d es8388->sysclk = %d \n",coeff,es8388->sysclk);
 
 	if (coeff < 0) {
 		coeff = get_coeff(es8388->sysclk / 2, params_rate(params));
@@ -888,11 +888,11 @@ static int es8388_pcm_hw_params(struct snd_pcm_substream *substream,
 	for(i=0;i<0x37;i++)
 	{
 		ret2 = snd_soc_read(codec, i);
-		printk("%x = %x \n",i,ret2);
+		pr_debug("%x = %x \n",i,ret2);
 		msleep(50);
 	}
 */
-	pr_info("-%s()\n",__FUNCTION__);
+	pr_debug("-%s()\n",__FUNCTION__);
 	return 0;
 }
 
@@ -902,7 +902,7 @@ static int es8388_mute(struct snd_soc_dai *dai, int mute)
 	//struct es8388_priv *es8388 = es8388_private;
 	// u16 mute_reg = snd_soc_read(codec, ES8388_DACCONTROL3) & 0xfb;
 
-	printk("Enter::%s----%d--hp_irq_flag=%d  mute=%d\n",__FUNCTION__,__LINE__,hp_irq_flag,mute);
+	pr_debug("Enter::%s----%d--hp_irq_flag=%d  mute=%d\n",__FUNCTION__,__LINE__,hp_irq_flag,mute);
 
 	mute_flag = mute;
 /*
@@ -940,7 +940,7 @@ static int es8388_set_bias_level(struct snd_soc_codec *codec,
 #ifdef KERNEL_4_9_XX
 	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 #endif
-	printk("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 	switch (level) {
 	case SND_SOC_BIAS_ON:
 		dev_dbg(codec->dev, "%s on\n", __func__);
@@ -1019,7 +1019,7 @@ static struct snd_soc_dai_driver es8388_dai = {
 static int es8388_suspend(struct snd_soc_codec *codec)
 {
 	// u16 i;
-	printk("Enter::%s----%d\n",__FUNCTION__,__LINE__);
+	pr_debug("Enter::%s----%d\n",__FUNCTION__,__LINE__);
 	snd_soc_write(codec, 0x19, 0x06);
 	snd_soc_write(codec, ES8388_ADCPOWER, 0xFF);
 	snd_soc_write(codec, ES8388_DACPOWER, 0xc0);
@@ -1032,7 +1032,7 @@ static int es8388_suspend(struct snd_soc_codec *codec)
 
 static int es8388_resume(struct snd_soc_codec *codec)
 {
-	printk("Enter::%s----%d\n",__FUNCTION__,__LINE__);
+	pr_debug("Enter::%s----%d\n",__FUNCTION__,__LINE__);
 	snd_soc_write(codec, ES8388_CHIPPOWER, 0x00);
 	snd_soc_write(codec, ES8388_DACPOWER, 0x0c);
 	snd_soc_write(codec, ES8388_ADCPOWER, 0x00);
@@ -1046,14 +1046,14 @@ static int es8388_probe(struct snd_soc_codec *codec)
 	struct es8388_priv *es8388 = snd_soc_codec_get_drvdata(codec);
 	int ret = -1;
 
-   	printk("Enter::%s----%d\n",__FUNCTION__,__LINE__);
+   	pr_debug("Enter::%s----%d\n",__FUNCTION__,__LINE__);
 
 	if (codec == NULL) {
 		dev_err(codec->dev, "Codec device not registered\n");
 		return -ENODEV;
 	}
 	else
-		pr_info("%s() codec != NULL\n",__FUNCTION__);
+		pr_debug("%s() codec != NULL\n",__FUNCTION__);
 /*
 	codec->read  = es8388_read_reg_cache;
 	codec->write = es8388_write;
@@ -1069,7 +1069,7 @@ static int es8388_probe(struct snd_soc_codec *codec)
 //		return ret;
 	}
 	else
-		pr_info("%s() es8388_reset OK!\n",__FUNCTION__);
+		pr_debug("%s() es8388_reset OK!\n",__FUNCTION__);
 
 	#if 1
 	snd_soc_write(codec, 0x35  , 0xa0);
@@ -1227,7 +1227,7 @@ static int es8388_i2c_probe(struct i2c_client *i2c,
 
 	es8388->spk_ctl_gpio = of_get_named_gpio(i2c->dev.of_node, "es8388-ce-gpio", 0);
 	if (es8388->spk_ctl_gpio < 0){
-		pr_info("%s() spk_ctl_gpio < 0\n",__FUNCTION__);
+		pr_debug("%s() spk_ctl_gpio < 0\n",__FUNCTION__);
 		es8388->spk_ctl_gpio = -1;
 	}
 	if (!gpio_is_valid(es8388->spk_ctl_gpio)) {
@@ -1237,7 +1237,7 @@ static int es8388_i2c_probe(struct i2c_client *i2c,
 	else
 	{
 		ret = gpio_request(es8388->spk_ctl_gpio, "es8328 ce-gpio");
-		pr_info("%s : gpio_request ret = %d\n", __func__, ret);
+		pr_debug("%s : gpio_request ret = %d\n", __func__, ret);
 		gpio_direction_output(es8388->spk_ctl_gpio, 0);
 	}
 

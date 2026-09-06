@@ -297,6 +297,7 @@ struct video_layer_s {
 	bool new_frame;
 	u32 vout_type;
 	bool bypass_pps;
+	bool auto_bypass_hdr4k;
 	bool switch_vf;
 	u8 force_switch_mode;
 	struct vframe_s *vf_ext;
@@ -431,6 +432,18 @@ bool is_di_post_mode(struct vframe_s *vf);
 
 bool is_afbc_enabled(u8 layer_id);
 bool is_local_vf(struct vframe_s *vf);
+bool video_layer_is_native_pps_config(
+	struct video_layer_s *layer,
+	struct vpp_frame_par_s *frame_par);
+void video_layer_update_auto_bypass_cache(
+	struct video_layer_s *layer,
+	struct vframe_s *vf);
+bool video_layer_should_auto_bypass_pps(
+	struct video_layer_s *layer,
+	struct vpp_frame_par_s *frame_par);
+bool video_layer_should_auto_bypass_cm(
+	struct video_layer_s *layer,
+	struct vpp_frame_par_s *frame_par);
 
 void safe_switch_videolayer(
 	u8 layer_id, bool on, bool async);

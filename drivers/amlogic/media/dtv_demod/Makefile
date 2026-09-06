@@ -15,4 +15,4 @@ ccflags-y += -I$(srctree)/drivers/media/dvb-core
 ccflags-y += -Idrivers/amlogic/media/dtv_demod/include
 #ccflags-y += -I./include
 #ccflags-y += -Idrivers/amlogic/dvb_tv/
-ccflags-y += -DDVB_CORE_ORI=1 -DDVB_49=1 -DDEBUG
+ccflags-y += -DDVB_CORE_ORI=1 -DDVB_49=1

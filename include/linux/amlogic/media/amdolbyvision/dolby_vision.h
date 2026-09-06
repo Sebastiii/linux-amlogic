@@ -52,8 +52,8 @@
 #define MUTE_TYPE_RGB	2
 #define MUTE_TYPE_IPT	3
 
-#define MD_BUF_SIZE 1024
-#define COMP_BUF_SIZE 8196
+#define MD_BUF_SIZE (1024 * 4)
+#define COMP_BUF_SIZE (8196 * 4)
 
 #define DV_SEI 0x01000000
 #define DV_AV1_SEI 0x14000000

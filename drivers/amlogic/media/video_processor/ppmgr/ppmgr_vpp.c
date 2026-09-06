@@ -63,7 +63,7 @@
 /*#endif*/
 
 
-#define PPMGRVPP_INFO(fmt, args...) pr_info("PPMGRVPP: info: "fmt"", ## args)
+#define PPMGRVPP_INFO(fmt, args...) pr_debug("PPMGRVPP: info: "fmt"", ## args)
 #define PPMGRVPP_DBG(fmt, args...) pr_debug("PPMGRVPP: dbg: "fmt"", ## args)
 #define PPMGRVPP_WARN(fmt, args...) pr_warn("PPMGRVPP: warn: "fmt"", ## args)
 #define PPMGRVPP_ERR(fmt, args...) pr_err("PPMGRVPP: err: "fmt"", ## args)
@@ -653,7 +653,7 @@ void vf_local_init(void)
 	ppmgr_device.get_dec_count = 0;
 	ppmgr_device.put_dec_count = 0;
 
-	pr_info("ppmgr local_init\n");
+	pr_debug("ppmgr local_init\n");
 	for (i = 0; i < VF_POOL_SIZE; i++) {
 		vfp_pool[i].index = i;
 		vfp_pool[i].dec_frame = NULL;

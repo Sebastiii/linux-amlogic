@@ -33,12 +33,12 @@
 
 extern int hdmirx_ext_debug_print;
 #define RXEXTERR(fmt, args...)  pr_err("hdmirx_ext:error: " fmt, ## args)
-#define RXEXTPR(fmt, args...)   pr_info("hdmirx_ext: " fmt, ## args)
+#define RXEXTPR(fmt, args...)   pr_debug("hdmirx_ext: " fmt, ## args)
 #define RXEXTDBG(fmt, args...)  do { if (hdmirx_ext_debug_print) \
 					RXEXTPR(fmt, ##args); \
 				} while (0)
 
-#define printf(fmt, args...)    pr_info("hdmirx_ext: " fmt, ## args)
+#define printf(fmt, args...)    pr_debug("hdmirx_ext: " fmt, ## args)
 
 #define RXEXT_PFUNC()    RXEXTPR("%s: line: %d\n", __func__, __LINE__)
 

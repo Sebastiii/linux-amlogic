@@ -34,6 +34,7 @@
 #include <linux/log2.h>
 #include <linux/cma.h>
 #include <linux/highmem.h>
+#include <linux/moduleparam.h>
 #include <linux/io.h>
 #include <trace/events/cma.h>
 #ifdef CONFIG_AMLOGIC_CMA
@@ -48,6 +49,9 @@
 struct cma cma_areas[MAX_CMA_AREAS];
 unsigned cma_area_count;
 static DEFINE_MUTEX(cma_mutex);
+
+int cma_debug_alloc;
+module_param(cma_debug_alloc, int, 0644);
 
 #ifdef CONFIG_AMLOGIC_CMA
 void cma_init_clear(struct cma *cma, bool clear)
@@ -575,6 +579,11 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align)
 	if (!count)
 		return NULL;
 
+	if (cma_debug_alloc && count >= 256)
+		pr_info("cma_alloc: %zu pages (%lu MB) align=%u caller=%pS\n",
+			count, (count * PAGE_SIZE) >> 20, align,
+			__builtin_return_address(0));
+
 	mask = cma_bitmap_aligned_mask(cma, align);
 	offset = cma_bitmap_aligned_offset(cma, align);
 	bitmap_maxno = cma_bitmap_maxno(cma);
@@ -667,6 +676,11 @@ bool cma_release(struct cma *cma, const struct page *pages, unsigned int count)
 	pr_debug("%s(page %p)\n", __func__, (void *)pages);
 
 	pfn = page_to_pfn(pages);
+
+	if (cma_debug_alloc && count >= 256)
+		pr_info("cma_release: %u pages (%lu MB) caller=%pS\n",
+			count, ((unsigned long)count * PAGE_SIZE) >> 20,
+			__builtin_return_address(0));
 
 	if (pfn < cma->base_pfn || pfn >= cma->base_pfn + cma->count)
 		return false;

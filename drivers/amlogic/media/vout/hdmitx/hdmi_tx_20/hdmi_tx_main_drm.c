@@ -400,14 +400,14 @@ void hdmitx_set_vsif_pkt(enum eotf_type type, enum mode_type tunnel_mode,
 		}
 		/*SDR case*/
 		else {
-			pr_info("hdmitx: Dolby VSIF, VEN_DB2[3]) = %d\n",
+			pr_debug("hdmitx: Dolby VSIF, VEN_DB2[3]) = %d\n",
 				VEN_DB2[3]);
 			hdev->hwop.setpacket(
 				HDMI_PACKET_VEND, VEN_DB2, VEN_HB);
 			if (signal_sdr) {
-				pr_info("hdmitx: Dolby VSIF, switching signal to SDR\n");
+				pr_debug("hdmitx: Dolby VSIF, switching signal to SDR\n");
 				update_current_para(hdev);
-				pr_info("vic:%d, cd:%d, cs:%d, cr:%d\n",
+				pr_debug("vic:%d, cd:%d, cs:%d, cr:%d\n",
 					hdev->para->vic, hdev->para->cd,
 					hdev->para->cs, hdev->para->cr);
 				hdev->hwop.cntlconfig(hdev,
@@ -703,7 +703,7 @@ static void recalc_vinfo_sync_duration(struct vinfo_s *info, unsigned int frac)
 {
 	struct frac_rate_table *fr = &fr_tab[0];
 
-	pr_info(SYS "recalc before %s %d %d, frac %d\n", info->name,
+	pr_debug(SYS "recalc before %s %d %d, frac %d\n", info->name,
 		info->sync_duration_num, info->sync_duration_den, info->frac);
 
 	while (fr->hz) {
@@ -722,7 +722,7 @@ static void recalc_vinfo_sync_duration(struct vinfo_s *info, unsigned int frac)
 		fr++;
 	}
 
-	pr_info(SYS "recalc after %s %d %d, frac %d\n", info->name,
+	pr_debug(SYS "recalc after %s %d %d, frac %d\n", info->name,
 		info->sync_duration_num, info->sync_duration_den, info->frac);
 }
 
@@ -747,7 +747,7 @@ static void hdmi_physical_size_update(struct hdmitx_dev *hdev)
 			info->screen_real_width = width;
 			info->screen_real_height = height;
 		}
-		pr_info(SYS "update physical size: %d %d\n",
+		pr_debug(SYS "update physical size: %d %d\n",
 			info->screen_real_width, info->screen_real_height);
 	}
 }
@@ -756,7 +756,7 @@ static void hdrinfo_to_vinfo(struct vinfo_s *info, struct hdmitx_dev *hdev)
 {
 	memcpy(&info->hdr_info, &hdev->rxcap.hdr_info, sizeof(struct hdr_info));
 	info->hdr_info.colorimetry_support = hdev->rxcap.colorimetry_data;
-	pr_info(SYS "update rx hdr info %x\n",
+	pr_debug(SYS "update rx hdr info %x\n",
 		info->hdr_info.hdr_support);
 }
 
@@ -827,7 +827,7 @@ static int set_disp_mode_auto(void)
 	info = hdmitx_get_current_vinfo();
 	if (!info || !info->name)
 		return -1;
-	pr_info(SYS "get current mode: %s\n", info->name);
+	pr_debug(SYS "get current mode: %s\n", info->name);
 	/* get current vinfo and refesh */
 	recalc_vinfo_sync_duration(info,
 				   hdmitx_device.frac_rate_policy);
@@ -1852,7 +1852,7 @@ static void hdmitx_set_hdr10plus_pkt(unsigned int flag,
 	}
 
 	if ((!data) || (!flag)) {
-		pr_info("hdmitx_set_hdr10plus_pkt: null vsif\n");
+		pr_debug("hdmitx_set_hdr10plus_pkt: null vsif\n");
 		hdev->hwop.setpacket(HDMI_PACKET_VEND, NULL, NULL);
 		hdev->hwop.cntlconfig(hdev, CONF_AVI_BT2020,
 			CLR_AVI_BT2020);
@@ -5067,7 +5067,7 @@ static void hdmitx_get_edid(struct hdmitx_dev *hdev)
 	unsigned long flags = 0;
 
 	mutex_lock(&getedid_mutex);
-	/* TODO hdmitx_edid_ram_buffer_clear(hdev); */
+	hdmitx_edid_ram_buffer_clear(hdev);
 	hdev->hwop.cntlddc(hdev, DDC_RESET_EDID, 0);
 	hdev->hwop.cntlddc(hdev, DDC_PIN_MUX_OP, PIN_MUX);
 	/* start reading edid frist time */

@@ -14,7 +14,6 @@
  * more details.
  *
  */
-#define DEBUG
 #undef pr_fmt
 #define pr_fmt(fmt) "iec_info: " fmt
 

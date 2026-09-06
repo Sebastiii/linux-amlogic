@@ -55,7 +55,7 @@
 #define V4LVIDEO_POOL_SIZE 18
 #define ION_VF_RECEIVER_NAME_SIZE 32
 
-#define V4LVID_INFO(fmt, args...) pr_info("v4lvid: info: " fmt, ## args)
+#define V4LVID_INFO(fmt, args...) pr_debug("v4lvid: info: " fmt, ## args)
 #define V4LVID_DBG(fmt, args...) pr_debug("v4lvid: dbg: " fmt, ## args)
 #define V4LVID_ERR(fmt, args...) pr_err("v4lvid: err: " fmt, ## args)
 

@@ -18,7 +18,6 @@
 #ifndef OSD_LOG_H
 #define OSD_LOG_H
 
-#define DEBUG
 #ifdef DEBUG
 #define  AMLOG   1
 #define LOG_LEVEL_VAR amlog_level_ppmgr

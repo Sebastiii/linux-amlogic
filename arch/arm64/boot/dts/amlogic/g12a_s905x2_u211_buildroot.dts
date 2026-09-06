@@ -1334,7 +1334,8 @@
 	sd {
 		caps = "MMC_CAP_4_BIT_DATA",
 			 "MMC_CAP_MMC_HIGHSPEED",
-			 "MMC_CAP_SD_HIGHSPEED";
+			 "MMC_CAP_SD_HIGHSPEED",
+			 "MMC_CAP_ERASE";
 		f_min = <400000>;
 		f_max = <50000000>;
 	};
@@ -1345,7 +1346,8 @@
 	sd {
 		caps = "MMC_CAP_4_BIT_DATA",
 			 "MMC_CAP_MMC_HIGHSPEED",
-			 "MMC_CAP_SD_HIGHSPEED";
+			 "MMC_CAP_SD_HIGHSPEED",
+			 "MMC_CAP_ERASE";
 		f_min = <400000>;
 		f_max = <50000000>;
 	};

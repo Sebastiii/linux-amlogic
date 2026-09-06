@@ -1436,6 +1436,7 @@ int amvecm_on_vs(
 {
 	int result = 0;
 	int vf_state = 0;
+	bool bypass_pq = flags & CSC_FLAG_BYPASS_PQ;
 
 	if (probe_ok == 0)
 		return 0;
@@ -1461,11 +1462,11 @@ int amvecm_on_vs(
 			toggle_vf, vf, flags, vd_path);
 		if (toggle_vf) {
 			ioctrl_get_hdr_metadata(toggle_vf);
-			if (vd_path == VD1_PATH)
+			if (vd_path == VD1_PATH && !bypass_pq)
 				vf_state = cabc_add_hist_proc(toggle_vf);
 		}
 
-		if (toggle_vf && vd_path == VD1_PATH) {
+		if (toggle_vf && vd_path == VD1_PATH && !bypass_pq) {
 			lc_process(toggle_vf, sps_h_en, sps_v_en,
 				sps_w_in, sps_h_in);
 			amvecm_size_patch(cm_in_w, cm_in_h);
@@ -1474,7 +1475,7 @@ int amvecm_on_vs(
 		}
 		/*refresh vframe*/
 		if (toggle_vf == NULL && vf != NULL) {
-			if (vd_path == VD1_PATH) {
+			if (vd_path == VD1_PATH && !bypass_pq) {
 				lc_process(vf, sps_h_en, sps_v_en,
 				   sps_w_in, sps_h_in);
 				vf_state = cabc_add_hist_proc(vf);
@@ -1484,7 +1485,7 @@ int amvecm_on_vs(
 	} else {
 		result = amvecm_matrix_process(
 			NULL, NULL, flags, vd_path);
-		if (vd_path == VD1_PATH) {
+		if (vd_path == VD1_PATH && !bypass_pq) {
 			lc_process(NULL, sps_h_en, sps_v_en,
 				sps_w_in, sps_h_in);
 			/*1080i pulldown combing workaround*/
@@ -1498,7 +1499,7 @@ int amvecm_on_vs(
 		return result;
 
 	/* add some flag to trigger */
-	if (vf) {
+	if (vf && !bypass_pq) {
 		/*gxlx sharpness adaptive setting*/
 		if (is_meson_gxlx_cpu())
 			amve_sharpness_adaptive_setting(vf,
@@ -1518,7 +1519,7 @@ int amvecm_on_vs(
 	/* pq latch process */
 	amvecm_video_latch();
 	/*wq for cacb and aad*/
-	if (vd_path == VD1_PATH)
+	if (vd_path == VD1_PATH && !bypass_pq)
 		cabc_aad_on_vs(vf_state);
 	return result;
 }

@@ -117,3 +117,10 @@
 	gpio-vbus-power = "GPIOH_5";
 	gpios = <&gpio GPIOH_5 GPIO_ACTIVE_HIGH>;
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "Minix";
+		product_desc = "U22-XJ";
+	};
+};

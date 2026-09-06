@@ -6,3 +6,9 @@
 	coreelec-dt-id = "sc2_s905x4_buzztv_u5_4g_1gbit";
 	compatible = "amlogic, sc2", "buzztv,u5";
 };
+
+&amhdmitx {
+	vend_data {
+		product_desc = "U5";
+	};
+};

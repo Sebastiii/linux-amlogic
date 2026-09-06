@@ -263,6 +263,12 @@
 	/delete-node/ pdm;
 };
 
+&spdifb {
+	clocks = <&clkc CLKID_MPLL0
+			&clkaudio CLKID_AUDIO_GATE_SPDIFOUT_B
+			&clkaudio CLKID_AUDIO_SPDIFOUT_B>;
+};
+
 &earc {
 	status = "disabled";
 };

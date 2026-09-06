@@ -781,7 +781,7 @@ static ssize_t digital_raw_store(struct class *class,
 				 struct class_attribute *attr, const char *buf,
 				 size_t count)
 {
-	pr_info("buf=%s\n", buf);
+	pr_debug("buf=%s\n", buf);
 	if (buf[0] == '0')
 		IEC958_mode_raw = 0;	/* PCM */
 	else if (buf[0] == '1')
@@ -789,7 +789,7 @@ static ssize_t digital_raw_store(struct class *class,
 	else if (buf[0] == '2')
 		IEC958_mode_raw = 2;	/* RAW with over clock */
 
-	pr_info("IEC958_mode_raw=%d\n", IEC958_mode_raw);
+	pr_debug("IEC958_mode_raw=%d\n", IEC958_mode_raw);
 	return count;
 }
 
@@ -898,7 +898,7 @@ static ssize_t print_flag_store(struct class *class,
 {
 	unsigned int dec_opt = 0x1;
 
-	pr_info("buf=%s\n", buf);
+	pr_debug("buf=%s\n", buf);
 	if (buf[0] == '0')
 		dec_opt = 0;	/* disable print flag */
 	else if (buf[0] == '1')
@@ -932,7 +932,7 @@ static ssize_t dec_option_store(struct class *class,
 {
 	unsigned int dec_opt = 0x3;
 
-	pr_info("buf=%s\n", buf);
+	pr_debug("buf=%s\n", buf);
 	if (buf[0] == '0') {
 		dec_opt = 0;	/* mute ac3/dts */
 	} else if (buf[0] == '1') {

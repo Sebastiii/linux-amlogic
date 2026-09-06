@@ -776,7 +776,8 @@
 			caps = "MMC_CAP_4_BIT_DATA",
 				"MMC_CAP_MMC_HIGHSPEED",
 				"MMC_CAP_SD_HIGHSPEED",
-				"MMC_CAP_NONREMOVABLE"; /**ptm debug */
+				"MMC_CAP_NONREMOVABLE", /**ptm debug */
+				"MMC_CAP_ERASE";
 			f_min = <400000>;
 			f_max = <200000000>;
 			max_req_size = <0x20000>; /**128KB*/
@@ -1092,7 +1093,8 @@
 		caps = "MMC_CAP_4_BIT_DATA",
 			"MMC_CAP_MMC_HIGHSPEED",
 			"MMC_CAP_SD_HIGHSPEED",
-			"MMC_CAP_NONREMOVABLE"; /**ptm debug */
+			"MMC_CAP_NONREMOVABLE", /**ptm debug */
+			"MMC_CAP_ERASE";
 		f_min = <400000>;
 		f_max = <200000000>;
 	};

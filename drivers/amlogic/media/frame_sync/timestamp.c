@@ -15,7 +15,6 @@
  *
  */
 
-#define DEBUG
 #include <linux/module.h>
 #include <linux/amlogic/media/frame_sync/tsync.h>
 #include <linux/amlogic/media/frame_sync/tsync_pcr.h>
@@ -345,7 +344,7 @@ EXPORT_SYMBOL(timestamp_pcrscr_set);
 void timestamp_firstvpts_set(u32 pts)
 {
 	first_vpts = pts;
-	pr_info("video first pts = %x\n", first_vpts);
+	pr_debug("video first pts = %x\n", first_vpts);
 }
 EXPORT_SYMBOL(timestamp_firstvpts_set);
 
@@ -358,7 +357,7 @@ EXPORT_SYMBOL(timestamp_firstvpts_get);
 void timestamp_checkin_firstvpts_set(u32 pts)
 {
 	first_checkin_vpts = pts;
-	pr_info("video first checkin pts = %x\n", first_checkin_vpts);
+	pr_debug("video first checkin pts = %x\n", first_checkin_vpts);
 	timestamp_clean_pts_latency(0);
 }
 EXPORT_SYMBOL(timestamp_checkin_firstvpts_set);
@@ -366,7 +365,7 @@ EXPORT_SYMBOL(timestamp_checkin_firstvpts_set);
 void timestamp_checkin_firstapts_set(u32 pts)
 {
 	first_checkin_apts = pts;
-	pr_info("audio first checkin pts =%x\n", first_checkin_apts);
+	pr_debug("audio first checkin pts =%x\n", first_checkin_apts);
 	timestamp_clean_pts_latency(1);
 }
 EXPORT_SYMBOL(timestamp_checkin_firstapts_set);
@@ -386,7 +385,7 @@ EXPORT_SYMBOL(timestamp_checkin_firstapts_get);
 void timestamp_firstapts_set(u32 pts)
 {
 	first_apts = pts;
-	pr_info("audio first pts = %x\n", first_apts);
+	pr_debug("audio first pts = %x\n", first_apts);
 }
 EXPORT_SYMBOL(timestamp_firstapts_set);
 

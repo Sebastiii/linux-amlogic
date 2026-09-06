@@ -13,7 +13,6 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  */
-#define DEBUG
 
 #include <linux/module.h>
 #include <linux/moduleparam.h>

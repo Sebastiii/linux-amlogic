@@ -50,6 +50,7 @@
 #include <linux/amlogic/media/frame_sync/timestamp.h>
 #include <linux/kernel.h>
 #include <linux/amlogic/media/frame_sync/tsync.h>
+#include <linux/amlogic/media/di/di.h>
 #include "common/vfp.h"
 #include "amlvideo.h"
 
@@ -79,6 +80,7 @@ AMLVIDEO_MINOR_VERSION, AMLVIDEO_RELEASE)
 /*extern bool omx_secret_mode;*/
 
 static u32 omx_freerun_index = 0;
+static u32 drop_frame_enable;
 
 #define DUR2PTS(x) ((x) - ((x) >> 4))
 #define DUR2PTS_RM(x) ((x) & 0xf)
@@ -104,6 +106,8 @@ static unsigned int debug;
 
 static unsigned int vid_limit = 16;
 module_param(vid_limit, uint, 0644);
+module_param(drop_frame_enable, uint, 0664);
+MODULE_PARM_DESC(drop_frame_enable, "\n honour V4L2_BUF_FLAG_DONE as a frame drop\n");
 MODULE_PARM_DESC(vid_limit, "capture memory limit in megabytes");
 
 static int video_receiver_event_fun(int type, void *data, void*);
@@ -237,8 +241,22 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 	struct vivi_dev *dev = (struct vivi_dev *)private_data;
 
 	if (type == VFRAME_EVENT_PROVIDER_UNREG) {
+		struct vframe_s *rel_vf;
+
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_UNREG\n");
 		mutex_lock(&dev->vf_mutex);
+		if (drop_frame_enable) {
+			while ((rel_vf = vfq_pop(&dev->q_omx))) {
+				if (rel_vf->type &
+				    (VIDTYPE_DI_PW | VIDTYPE_INTERLACE))
+					dim_post_keep_cmd_release2(rel_vf);
+			}
+			while ((rel_vf = vfq_pop(&dev->q_ready))) {
+				if (rel_vf->type &
+				    (VIDTYPE_DI_PW | VIDTYPE_INTERLACE))
+					dim_post_keep_cmd_release2(rel_vf);
+			}
+		}
 		if (vf_get_receiver(dev->vf_provider_name)) {
 			AMLVIDEO_DBG("unreg:amlvideo\n");
 			vf_unreg_provider(&dev->video_vf_prov);
@@ -554,7 +572,15 @@ static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 	while ((vf = vfq_peek(&dev->q_omx)))
 	{
 		index = (u32)vf->pts_us64;
-		vfq_push(&dev->q_ready, vfq_pop(&dev->q_omx));
+		vf = vfq_pop(&dev->q_omx);
+		if (drop_frame_enable) {
+			if (p->index > index)
+				vf->flag |= VFRAME_FLAG_DROP_FRAME;
+			else if (p->index == index &&
+				 (p->flags & V4L2_BUF_FLAG_DONE))
+				vf->flag |= VFRAME_FLAG_DROP_FRAME;
+		}
+		vfq_push(&dev->q_ready, vf);
 		ATRACE_COUNTER(dev->v4l2_dev.name, vfq_level(&dev->q_omx));
 		ATRACE_COUNTER(dev->v4l2_dev.name, vfq_level(&dev->q_ready));
 		vf_notify_receiver(

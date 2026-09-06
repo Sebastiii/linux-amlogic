@@ -14,7 +14,6 @@
  * more details.
  *
  */
-#define  DEBUG
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
@@ -38,6 +37,13 @@
 #include "spdif_hw.h"
 #include "resample.h"
 #include "resample_hw.h"
+#include "aml_audio_debug.h"
+
+unsigned int aml_audio_debug;
+module_param(aml_audio_debug, uint, 0644);
+MODULE_PARM_DESC(aml_audio_debug,
+	"bitmap: 0x1=hwparams 0x2=codec 0x4=trigger 0x8=prepare 0x10=rate");
+EXPORT_SYMBOL_GPL(aml_audio_debug);
 #include "spdif.h"
 #include "spdif_match_table.c"
 #include "sharebuffer.h"
@@ -589,6 +595,9 @@ static int spdif_format_set_enum(
 		pr_err("bad parameter for spdif format set\n");
 		return -1;
 	}
+	aml_audio_dbg(AML_AUDIO_DBG_CODEC,
+		"spdif codec_type set (A) id=%d old=%u new=%d",
+		p_spdif->id, p_spdif->codec_type, index);
 	p_spdif->codec_type = index;
 
 	return 0;
@@ -802,6 +811,9 @@ static int spdif_b_format_set_enum(struct snd_kcontrol *kcontrol,
 	struct aml_spdif *p_spdif = snd_soc_component_get_drvdata(component);
 	int index = ucontrol->value.enumerated.item[0];
 
+	aml_audio_dbg(AML_AUDIO_DBG_CODEC,
+		"spdif codec_type set (B) id=%d old=%u new=%d",
+		p_spdif->id, p_spdif->codec_type, index);
 	p_spdif->codec_type = index;
 	return 0;
 }
@@ -1071,6 +1083,13 @@ static int aml_spdif_close(struct snd_pcm_substream *substream)
 static int aml_spdif_hw_params(struct snd_pcm_substream *substream,
 			 struct snd_pcm_hw_params *hw_params)
 {
+	aml_audio_dbg(AML_AUDIO_DBG_HWPARAMS,
+		"spdif pcm hw_params stream=%d rate=%d ch=%d format=%d bytes=%u",
+		substream->stream,
+		params_rate(hw_params),
+		params_channels(hw_params),
+		params_format(hw_params),
+		params_buffer_bytes(hw_params));
 	return snd_pcm_lib_malloc_pages(substream,
 					params_buffer_bytes(hw_params));
 }
@@ -1088,6 +1107,16 @@ static int aml_spdif_prepare(struct snd_pcm_substream *substream)
 	struct aml_spdif *p_spdif = runtime->private_data;
 	unsigned int start_addr, end_addr, int_addr;
 	unsigned int period, threshold;
+
+	aml_audio_dbg(AML_AUDIO_DBG_PREPARE,
+		"spdif prepare id=%d stream=%d rate=%u ch=%u period_size=%lu buffer_size=%lu codec_type=%u",
+		p_spdif->id,
+		substream->stream,
+		runtime->rate,
+		runtime->channels,
+		(unsigned long)runtime->period_size,
+		(unsigned long)runtime->buffer_size,
+		p_spdif->codec_type);
 
 	start_addr = runtime->dma_addr;
 	end_addr = start_addr + runtime->dma_bytes - FIFO_BURST;
@@ -1279,7 +1308,7 @@ static void aml_dai_spdif_shutdown(
 	/* disable clock and gate */
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		if (p_spdif->clk_cont) {
-			pr_info("spdif_%s keep clk continuous\n",
+			pr_debug("spdif_%s keep clk continuous\n",
 				(p_spdif->id == 0) ? "a":"b");
 			return;
 		}
@@ -1418,6 +1447,15 @@ static int aml_dai_spdif_trigger(struct snd_pcm_substream *substream, int cmd,
 	struct aml_spdif *p_spdif = snd_soc_dai_get_drvdata(cpu_dai);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 
+	aml_audio_dbg(AML_AUDIO_DBG_TRIGGER,
+		"spdif trigger id=%d stream=%d cmd=%d rate=%u ch=%u codec_type=%u",
+		p_spdif->id,
+		substream->stream,
+		cmd,
+		runtime->rate,
+		runtime->channels,
+		p_spdif->codec_type);
+
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
@@ -1428,9 +1466,9 @@ static int aml_dai_spdif_trigger(struct snd_pcm_substream *substream, int cmd,
 			p_spdif->id);
 
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-			dev_info(substream->pcm->card->dev,
-				 "S/PDIF[%d] Playback enable\n",
-				 p_spdif->id);
+			dev_dbg(substream->pcm->card->dev,
+				"S/PDIF[%d] Playback enable\n",
+				p_spdif->id);
 			aml_spdif_enable(p_spdif->actrl,
 			    substream->stream, p_spdif->id, true);
 			if (p_spdif->samesource_sel != SHAREBUFFER_NONE)
@@ -1446,9 +1484,9 @@ static int aml_dai_spdif_trigger(struct snd_pcm_substream *substream, int cmd,
 		} else {
 			struct snd_soc_card *card = cpu_dai->component->card;
 
-			dev_info(substream->pcm->card->dev,
-				 "S/PDIF[%d] Capture enable\n",
-				 p_spdif->id);
+			dev_dbg(substream->pcm->card->dev,
+				"S/PDIF[%d] Capture enable\n",
+				p_spdif->id);
 			aml_toddr_enable(p_spdif->tddr, 1);
 			aml_spdif_enable(p_spdif->actrl,
 					substream->stream, p_spdif->id, true);
@@ -1461,9 +1499,9 @@ static int aml_dai_spdif_trigger(struct snd_pcm_substream *substream, int cmd,
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-			dev_info(substream->pcm->card->dev,
-				 "S/PDIF[%d] Playback disable\n",
-				 p_spdif->id);
+			dev_dbg(substream->pcm->card->dev,
+				"S/PDIF[%d] Playback disable\n",
+				p_spdif->id);
 			/* continuous-clock, spdif out is not disable,
 			 * only mute, ensure spdif outputs zero data.
 			 */
@@ -1488,9 +1526,9 @@ static int aml_dai_spdif_trigger(struct snd_pcm_substream *substream, int cmd,
 
 			aml_spdif_enable(p_spdif->actrl,
 					substream->stream, p_spdif->id, false);
-			dev_info(substream->pcm->card->dev,
-				 "S/PDIF[%d] Capture disable\n",
-				 p_spdif->id);
+			dev_dbg(substream->pcm->card->dev,
+				"S/PDIF[%d] Capture disable\n",
+				p_spdif->id);
 
 			toddr_stopped = aml_toddr_burst_finished(p_spdif->tddr);
 			if (toddr_stopped)
@@ -1515,6 +1553,16 @@ static int aml_dai_spdif_hw_params(struct snd_pcm_substream *substream,
 	struct soft_locker *locker = aml_get_card_locker(card);
 	unsigned int rate = params_rate(params);
 	int ret = 0;
+
+	aml_audio_dbg(AML_AUDIO_DBG_HWPARAMS | AML_AUDIO_DBG_RATE,
+		"spdif dai hw_params id=%d stream=%d rate=%u ch=%u format=%d bufFrames=%u codec_type=%u",
+		p_spdif->id,
+		substream->stream,
+		rate,
+		params_channels(params),
+		params_format(params),
+		params_buffer_size(params),
+		p_spdif->codec_type);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		struct frddr *fr = p_spdif->fddr;

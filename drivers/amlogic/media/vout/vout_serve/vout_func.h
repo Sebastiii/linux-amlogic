@@ -20,7 +20,7 @@
 #include <linux/cdev.h>
 #include <linux/amlogic/media/vout/vout_notify.h>
 
-#define VOUTPR(fmt, args...)     pr_info("vout: "fmt"", ## args)
+#define VOUTPR(fmt, args...)     pr_debug("vout: "fmt"", ## args)
 #define VOUTERR(fmt, args...)    pr_err("vout: error: "fmt"", ## args)
 
 /* [3: 2] cntl_viu2_sel_venc:

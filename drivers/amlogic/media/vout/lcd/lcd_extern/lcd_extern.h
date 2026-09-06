@@ -23,8 +23,8 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/amlogic/media/vout/lcd/lcd_vout.h>
 
-#define EXTPR(fmt, args...)     pr_info("lcd extern: "fmt"", ## args)
-#define EXTERR(fmt, args...)    pr_info("lcd extern: error: "fmt"", ## args)
+#define EXTPR(fmt, args...)     pr_debug("lcd extern: "fmt"", ## args)
+#define EXTERR(fmt, args...)    pr_err("lcd extern: error: "fmt"", ## args)
 
 #define LCD_EXTERN_DRIVER		"lcd_extern"
 

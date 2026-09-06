@@ -79,7 +79,7 @@ struct audioeffect *s_effect;
 static struct audioeffect *get_audioeffects(void)
 {
 	if (!s_effect) {
-		pr_info("Not init audio effects\n");
+		pr_debug("Not init audio effects\n");
 		return NULL;
 	}
 

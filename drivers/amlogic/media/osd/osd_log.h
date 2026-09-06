@@ -42,7 +42,7 @@ extern unsigned int osd_log_module;
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #define osd_log_info(fmt, ...) \
-	pr_info(fmt, ##__VA_ARGS__)
+	pr_debug(fmt, ##__VA_ARGS__)
 
 #define osd_log_err(fmt, ...) \
 	pr_err(fmt, ##__VA_ARGS__)

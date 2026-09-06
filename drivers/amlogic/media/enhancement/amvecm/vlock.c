@@ -3042,14 +3042,14 @@ int vlock_notify_callback(struct notifier_block *block, unsigned long cmd,
 					break;
 			}
 		}
-		pr_info("vlock: event MODE_CHANGE_PRE %d\n", cnt);
+		pr_debug("vlock: event MODE_CHANGE_PRE %d\n", cnt);
 		break;
 
 	case VOUT_EVENT_MODE_CHANGE:
 		vlock.fsm_pause = false;
 		vlock.fsm_sts = VLOCK_STATE_NULL;
 		vlock_notify_event = cmd;
-		pr_info("vlock: event MODE_CHANGE\n");
+		pr_debug("vlock: event MODE_CHANGE\n");
 		break;
 
 	default:

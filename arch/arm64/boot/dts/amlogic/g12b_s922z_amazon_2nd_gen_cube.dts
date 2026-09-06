@@ -118,7 +118,29 @@
 		cbus@ffd00000 {
 			i2c@1c000 {  
 				/delete-node/ rt5651@1a;
-			
+				
+				tsl2540@39 {
+					compatible = "amstaos,tsl2540";
+					reg = <0x39>;
+					als_name = "taos_als";
+					persist = <0x12>;
+					als_gain = <0x03>;
+					als_gain_factor = <0x01>;
+					als_deltap = <0x0a>;
+					als_time = <0x7b>;
+					d_factor = <0xb79b>;
+					ch0_coef0 = <0x3e8>;
+					ch1_coef0 = <0x1ed>;
+					ch0_coef1 = <0x26b>;
+					ch1_coef1 = <0xffffffe0>;
+					az_iterations = <0x7e>;
+					als_can_wake = <0x00>;
+					boot-on;
+					#address-cells = <0x01>;
+					#size-cells = <0x01>;
+					status = "okay";
+				};	
+						
 				is31fl3236@3F {
 					compatible = "issi,is31fl3236,gva";
 					reg = <0x3f>;
@@ -260,7 +282,8 @@
 		interrupts = <0x00 0xbe 0x04>;
 
 		sd {
-			caps = "MMC_CAP_4_BIT_DATA\0MMC_CAP_MMC_HIGHSPEED\0MMC_CAP_SD_HIGHSPEED\0MMC_CAP_UHS_SDR12\0MMC_CAP_UHS_SDR25\0MMC_CAP_UHS_SDR50\0MMC_CAP_UHS_SDR104";
+			caps = "MMC_CAP_4_BIT_DATA\0MMC_CAP_MMC_HIGHSPEED\0MMC_CAP_SD_HIGHSPEED\0MMC_CAP_UHS_SDR12\0MMC_CAP_UHS_SDR25\0MMC_CAP_UHS_SDR50\0MMC_CAP_UHS_SDR104",
+			 "MMC_CAP_ERASE";
 			vol_switch_def = <&gpio GPIOX_17 GPIO_ACTIVE_HIGH>;
 			vol_switch = <&gpio GPIOX_19 GPIO_ACTIVE_HIGH>;
 			vol_switch_delay = <0x96>;
@@ -508,4 +531,11 @@
 		max-duty-cycle = <0x4e2>;
 		voltage-table = <0xf9830 0x00 0xf6d38 0x03 0xf4628 0x06 0xf1f18 0x0a 0xef808 0x0d 0xed0f8 0x10 0xea9e8 0x14 0xe82d8 0x17 0xe5bc8 0x1a 0xe34b8 0x1e 0xe0da8 0x21 0xde698 0x24 0xdbf88 0x28 0xd9878 0x2b 0xd7168 0x2e 0xd4a58 0x32 0xd2348 0x35 0xcfc38 0x38 0xcd528 0x3c 0xcae18 0x3f 0xc8708 0x43 0xc5ff8 0x46 0xc38e8 0x49 0xc11d8 0x4c 0xbeac8 0x50 0xbc3b8 0x53 0xb9ca8 0x56 0xb7598 0x5a 0xb4e88 0x5d 0xb2778 0x60 0xb0068 0x64>;
 	};	
+};
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "Amazon";
+		product_desc = "Fire TV Cube 2";
+	};
 };

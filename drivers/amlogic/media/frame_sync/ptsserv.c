@@ -15,7 +15,6 @@
  *
  */
 
-#define DEBUG
 #include <linux/module.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -487,7 +486,7 @@ static int pts_checkin_offset_inline(u8 type, u32 offset, u32 val, u64 us64)
 			 *if(tsync_get_debug_pts_checkin() &&
 			 * tsync_get_debug_vpts()) {
 			 */
-			pr_info(
+			pr_debug(
 				"[pts_kpi] first check in vpts <0x%x:0x%x(0x%llx)> ok!\n",
 				offset, val, us64);
 			/* } */
@@ -500,7 +499,7 @@ static int pts_checkin_offset_inline(u8 type, u32 offset, u32 val, u64 us64)
 			 *if (tsync_get_debug_pts_checkin() &&
 			 * tsync_get_debug_apts()) {
 			 */
-			pr_info(
+			pr_debug(
 				"[pts_kpi] first check in apts <0x%x:0x%x(0x%llx)> ok!\n",
 				offset, val, us64);
 			/* } */
@@ -941,7 +940,7 @@ static int pts_lookup_offset_inline_locked(u8 type, u32 offset, u32 *val,
 				ptable->first_lookup_ok = 1;
 				if (type == PTS_TYPE_VIDEO ||
 					type == PTS_TYPE_AUDIO) {
-					pr_info("[pts_kpi] first lookup %spts=0x%x offset:0x%x\n",
+					pr_debug("[pts_kpi] first lookup %spts=0x%x offset:0x%x\n",
 						(type == PTS_TYPE_VIDEO)?"v":"a",
 						*val, offset);
 					/*timestamp_firstvpts_set(*val);*/
@@ -1408,6 +1407,55 @@ out:
 }
 EXPORT_SYMBOL(pts_get_rec_num);
 
+int pts_get_rec_num_bounded(u8 type, u32 val, int max)
+{
+	ulong flags;
+	struct pts_table_s *ptable;
+	struct pts_rec_s *p;
+	int r = 0;
+
+	if (type >= PTS_TYPE_MAX)
+		return 0;
+
+	ptable = &pts_table[type];
+
+	spin_lock_irqsave(&lock, flags);
+
+	if (ptable->status != PTS_RUNNING)
+		goto out;
+
+	if (list_empty(&ptable->valid_list))
+		goto out;
+
+	if (ptable->pts_search == &ptable->valid_list) {
+		p = list_entry(ptable->valid_list.next,
+			       struct pts_rec_s, list);
+	} else {
+		p = list_entry(ptable->pts_search, struct pts_rec_s,
+			       list);
+	}
+
+	if (OFFSET_LATER(val, p->offset)) {
+		list_for_each_entry_continue(p, &ptable->valid_list,
+					     list) {
+			if (OFFSET_LATER(p->offset, val))
+				break;
+		}
+	}
+
+	list_for_each_entry_continue(p, &ptable->valid_list, list) {
+		r++;
+		if (r >= max)
+			break;
+	}
+
+out:
+	spin_unlock_irqrestore(&lock, flags);
+
+	return r;
+}
+EXPORT_SYMBOL(pts_get_rec_num_bounded);
+
 /* #define SIMPLE_ALLOC_LIST */
 static void free_pts_list(struct pts_table_s *ptable)
 {
@@ -1487,7 +1535,7 @@ int pts_start(u8 type)
 	ulong flags;
 	struct pts_table_s *ptable;
 
-	pr_info("%s, type=%d\n", __func__, type);
+	pr_debug("%s, type=%d\n", __func__, type);
 
 	if (type >= PTS_TYPE_MAX)
 		return -EINVAL;
@@ -1625,7 +1673,7 @@ int pts_stop(u8 type)
 	ulong flags;
 	struct pts_table_s *ptable;
 
-	pr_info("%s, type=%d\n", __func__, type);
+	pr_debug("%s, type=%d\n", __func__, type);
 
 	if (type >= PTS_TYPE_MAX)
 		return -EINVAL;

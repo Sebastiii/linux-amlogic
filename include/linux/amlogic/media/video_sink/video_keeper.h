@@ -30,6 +30,7 @@ void video_keeper_exit(void);
 unsigned int vf_keep_current(
 	struct vframe_s *cur_dispbuf,
 	struct vframe_s *cur_dispbuf2);
+void vf_keep_extra(struct vframe_s *vf);
 unsigned int vf_keep_pip_current_locked(
 	struct vframe_s *cur_dispbuf,
 	struct vframe_s *cur_dispbuf_el);

@@ -15,7 +15,6 @@
  *
  */
 
-#define DEBUG
 #include <linux/clk.h>
 #include <linux/device.h>
 #include <linux/gpio.h>

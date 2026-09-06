@@ -23,3 +23,10 @@
 		status = "okay";
 	};
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "Minix";
+		product_desc = "U22-XJ Max";
+	};
+};

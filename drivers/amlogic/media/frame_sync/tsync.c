@@ -1061,10 +1061,10 @@ void tsync_avevent_locked(enum avevent_e event, u32 param)
 	switch (event) {
 	case VIDEO_START:
 		if (tsync_video_started == 0) {
-			pr_info("[%s %d]VIDEO_START-tsync_mode:%d(%c)\n",
+			pr_debug("[%s %d]VIDEO_START-tsync_mode:%d(%c)\n",
 				__func__, __LINE__,
 				tsync_mode, tsync_av_mode);
-			pr_info("pcr:0x%x,param:0x%x,vpts:0x%x,apts:0x%x\n",
+			pr_debug("pcr:0x%x,param:0x%x,vpts:0x%x,apts:0x%x\n",
 				timestamp_pcrscr_get(), param,
 				timestamp_vpts_get(),
 				timestamp_apts_get());

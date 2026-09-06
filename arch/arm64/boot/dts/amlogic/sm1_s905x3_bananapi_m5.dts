@@ -228,3 +228,10 @@
 &saradc {
 	status = "okay";
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "SV";
+		product_desc = "Bananapi-M5";
+	};
+};

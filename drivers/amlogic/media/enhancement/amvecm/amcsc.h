@@ -304,6 +304,9 @@ extern int customer_hdr_clipping;
 uint32_t sink_dv_support(const struct vinfo_s *vinfo);
 uint32_t sink_hdr_support(const struct vinfo_s *vinfo);
 
+void amvecm_invalidate_cur_signal_type(void);
+void amvecm_invalidate_output_format(void);
+
 extern uint gamut_conv_enable;
 #endif /* AM_CSC_H */
 

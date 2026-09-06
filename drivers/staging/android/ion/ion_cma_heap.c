@@ -29,6 +29,7 @@
 #include "ion.h"
 #include "ion_priv.h"
 
+extern int cma_debug_alloc;
 #define ION_CMA_ALLOCATE_FAILED -1
 
 struct ion_cma_heap {
@@ -180,6 +181,10 @@ static int ion_cma_allocate(struct ion_heap *heap, struct ion_buffer *buffer,
 
 	if (align > PAGE_SIZE)
 		return -EINVAL;
+
+	if (cma_debug_alloc && len >= (1 << 20))
+		pr_info("ion_cma_allocate: heap=%s len=%lu (%lu MB) flags=0x%lx\n",
+			heap->name, len, len >> 20, flags);
 
 	info = kzalloc(sizeof(struct ion_cma_buffer_info), GFP_KERNEL);
 	if (!info)

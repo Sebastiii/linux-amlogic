@@ -1329,7 +1329,8 @@
 			 "MMC_CAP_UHS_SDR12",
 			 "MMC_CAP_UHS_SDR25",
 			 "MMC_CAP_UHS_SDR50",
-			 "MMC_CAP_UHS_SDR104";
+			 "MMC_CAP_UHS_SDR104",
+			 "MMC_CAP_ERASE";
 
 		f_min = <400000>;
 		f_max = <200000000>;

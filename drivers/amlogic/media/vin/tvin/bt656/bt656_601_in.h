@@ -25,7 +25,7 @@
 #include "../tvin_global.h"
 #include <linux/amlogic/cpu_version.h>
 
-#define BT656PR(fmt, args...)    pr_info("amvdec_bt656in: "fmt"", ## args)
+#define BT656PR(fmt, args...)    pr_debug("amvdec_bt656in: "fmt"", ## args)
 #define BT656ERR(fmt, args...)   pr_err("amvdec_bt656in: error: "fmt"", ## args)
 
 

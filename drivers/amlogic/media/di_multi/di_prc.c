@@ -42,7 +42,7 @@
 #include <linux/amlogic/media/di/di.h>
 //#include "../deinterlace/di_pqa.h"
 
-unsigned int di_dbg = DBG_M_EVENT/*|DBG_M_IC|DBG_M_MEM2|DBG_M_RESET_PRE*/;
+unsigned int di_dbg;
 module_param(di_dbg, uint, 0664);
 MODULE_PARM_DESC(di_dbg, "debug print");
 

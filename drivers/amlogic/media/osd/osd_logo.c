@@ -237,12 +237,12 @@ int set_osd_logo_freescaler(void)
 		return 0;
 
 	if (vinfo)
-		pr_info("outputmode changed to %s, reset osd%d, (%d, %d, %d, %d) -> (%d, %d, %d, %d)\n",
+		pr_debug("outputmode changed to %s, reset osd%d, (%d, %d, %d, %d) -> (%d, %d, %d, %d)\n",
 			vinfo->name, index,
 			dst_x_start, dst_y_start, dst_x_end, dst_y_end,
 			0, 0, target_x_end, target_y_end);
 	else
-		pr_info("outputmode changed to NULL, reset osd%d, (%d, %d, %d, %d) -> (%d, %d, %d, %d)\n",
+		pr_debug("outputmode changed to NULL, reset osd%d, (%d, %d, %d, %d) -> (%d, %d, %d, %d)\n",
 			index,
 			dst_x_start, dst_y_start, dst_x_end, dst_y_end,
 			0, 0, target_x_end, target_y_end);

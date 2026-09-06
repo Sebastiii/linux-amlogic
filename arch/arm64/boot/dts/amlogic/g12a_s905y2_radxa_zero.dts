@@ -6,3 +6,10 @@
 
 	/delete-node/ memory@00000000;
 };
+
+&amhdmitx {
+	vend_data {
+		vendor_name = "Radxa";
+		product_desc = "Zero";
+	};
+};

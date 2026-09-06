@@ -14,7 +14,6 @@
  * more details.
  *
  */
-#define DEBUG
 
 #include <linux/module.h>
 #include <linux/errno.h>

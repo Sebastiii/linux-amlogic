@@ -14,7 +14,6 @@
  * more details.
  *
  */
-#define DEBUG
 #undef pr_fmt
 #define pr_fmt(fmt) "audio_ddr_mngr: " fmt
 
@@ -230,12 +229,10 @@ void audio_toddr_irq_enable(struct toddr *to, bool en)
 	if (!to || !to->in_use || to->irq < 0)
 		return;
 
-	mutex_lock(&ddr_mutex);
 	if (en)
 		enable_irq(to->irq);
 	else
 		disable_irq_nosync(to->irq);
-	mutex_unlock(&ddr_mutex);
 }
 
 static inline unsigned int
@@ -1142,7 +1139,7 @@ static struct frddr *register_frddr_l(struct device *dev,
 	}
 	from->dev = dev;
 	from->in_use = true;
-	pr_info("frddrs[%d] registered by device %s\n", i, dev_name(dev));
+	pr_debug("frddrs[%d] registered by device %s\n", i, dev_name(dev));
 	return from;
 }
 
@@ -1182,7 +1179,7 @@ static int unregister_frddr_l(struct device *dev, void *data)
 	free_irq(from->irq, data);
 	from->dev = NULL;
 	from->in_use = false;
-	pr_info("frddrs[%d] released by device %s\n", i, dev_name(dev));
+	pr_debug("frddrs[%d] released by device %s\n", i, dev_name(dev));
 	return 0;
 }
 
@@ -1518,6 +1515,35 @@ void aml_frddr_enable(struct frddr *fr, bool enable)
 	    (!enable) &&
 	    (value & 0x80000000))
 		aml_frddr_burst_finished(fr);
+
+	if (enable) {
+		unsigned int dst_reg, src_sel_en;
+
+		if (fr->chipinfo
+			&& fr->chipinfo->src_sel_ctrl) {
+			dst_reg = calc_frddr_address(EE_AUDIO_FRDDR_A_CTRL2,
+				reg_base);
+			src_sel_en = 4;
+			if (fr->channels)
+				aml_audiobus_update_bits(actrl, dst_reg,
+					0xff << 24, (fr->channels - 1) << 24);
+		} else {
+			dst_reg = calc_frddr_address(EE_AUDIO_FRDDR_A_CTRL0,
+				reg_base);
+			src_sel_en = 3;
+		}
+
+		aml_audiobus_update_bits(actrl, dst_reg, 0x7, fr->dest & 0x7);
+
+		if (fr->chipinfo
+			&& fr->chipinfo->same_src_fn)
+			aml_audiobus_update_bits(actrl, dst_reg,
+				1 << src_sel_en, 1 << src_sel_en);
+
+		if (fr->chipinfo
+			&& fr->chipinfo->ugt)
+			aml_audiobus_update_bits(actrl, reg, 0x1, 0x1);
+	}
 
 	/* ensure disable before enable frddr */
 	aml_audiobus_update_bits(actrl,	reg, 1<<31, enable<<31);

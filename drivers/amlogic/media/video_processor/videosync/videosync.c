@@ -15,7 +15,6 @@
  *
  */
 
-#define DEBUG
 
 #include "videosync.h"
 #include <linux/amlogic/major.h>

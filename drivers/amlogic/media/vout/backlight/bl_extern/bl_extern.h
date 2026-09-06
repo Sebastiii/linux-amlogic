@@ -22,7 +22,7 @@
 
 
 extern unsigned int bl_debug_print_flag;
-#define BLEX(fmt, args...)     pr_info("bl extern: "fmt"", ## args)
+#define BLEX(fmt, args...)     pr_debug("bl extern: "fmt"", ## args)
 #define BLEXERR(fmt, args...)  pr_err("bl extern: error: "fmt"", ## args)
 
 #define BL_EXTERN_DRIVER	"bl_extern"
